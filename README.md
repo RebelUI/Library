@@ -2250,7 +2250,7 @@ local tbl = Tab:Table({ Columns = { "Player", "Kills" }, Rows = { { "Ava", 12 },
 
 ## The key panel (`UI:KeyGate`)
 
-A card with your logo (or an emoji) and the hub name at the top, a colored note, three steps (1 Get key, 2 Paste, 3 Verify), the get-key buttons two per row, a key box, a Verify button, a "Remember my key" tick, a tries counter, extra buttons (Discord, Help) and a small tagline. Tap a get-key button and its link is copied with a green COPIED flash. Wrong key: the card shakes. Right key: the padlock opens and it booms.
+A WIDE card made for a phone held sideways (one tall column in portrait; `Layout = "Wide"` or `"Tall"` forces one). Left side: your logo with a pulsing glow (or an emoji), the hub name, a colored note, the 3 steps and the Discord / Help buttons. Right side: the get-key buttons, the key box and Verify. The game behind it is blurred (`Blur = false` turns that off) and glow dots float behind the card. It has a colored note, three steps (1 Get key, 2 Paste, 3 Verify), the get-key buttons two per row, a key box, a Verify button, a "Remember my key" tick, a tries counter, extra buttons (Discord, Help) and a small tagline. Tap a get-key button and its link is copied with a green COPIED flash. Wrong key: the card shakes. Right key: the padlock opens and it booms.
 
 ```lua
 local ok, key = UI:KeyGate({
@@ -2412,7 +2412,7 @@ Together with the open animations, click ripples, boom, confetti, shake, shimmer
 ## Your icon pack, rich text, Activate cover and toggle styles
 
 **Icons.** `UI.Icons` holds your uploaded Roblox images: `silent save file copy downloads refresh link info printer share notification ringing padlock openpadlock loading calendar key elements expand minimize wrench right up left star`.
-Your black icons sit on a red tile so they stay readable (`UI.IconTileColor = Color3.fromRGB(...)` changes the color). `UI.Icons.test` is a transparent one and shows with no tile. `UI.IconTile = false` turns every tile off (use white / transparent PNGs).
+Your black icons are shown alone with a soft glow behind them (Roblox cannot recolor black images, so a glow is the only way to see them on a dark panel). `UI.IconGlow = false` turns the glow off, `UI.IconTile = true` gives a solid colored tile (`UI.IconTileColor`). For perfectly clean icons use the white PNGs in the "white icons" folder.
 
 ```lua
 Win:CreateTab({ Name = "Tools", Icon = UI.Icons.wrench })
@@ -2475,21 +2475,42 @@ Win:SetTrail(true, "Rainbow") -- sparkles follow your finger (Win:SetTrail(false
 
 `Example.lua` has all of these on the **Media** tab (inside Main). Song links need an executor with `getcustomasset`; plain Roblox audio ids work everywhere (many old audio ids are private now, so test yours).
 
-## Summary tab: everything the player did, plus Refresh / Copy / Print / Save
+## Summary tab: everything the player did, plus 8 icon buttons
 
-`Win:CreateNotificationsTab()` is the Summary. It lists every alert **and every action**: toggles ("Turned Aimbot ON"), sliders ("Set Speed to 55"), dropdowns, buttons, inputs, keybinds and tab changes. Keys and passwords typed in an Input are shown as `(hidden)`. Four icon buttons sit on top: **Refresh**, **Copy** (to the clipboard), **Print** (console and `RebelUI_summary.txt`) and **Save**.
+`Win:CreateNotificationsTab()` is the Summary. It lists every alert **and every action**: toggles ("Turned Aimbot ON"), sliders ("Set Speed to 55"), dropdowns, buttons, inputs, keybinds and tab changes. Keys and passwords typed in an Input are shown as `(hidden)`. Two rows of icon buttons sit on top, each with its own job:
+
+| Icon | Does |
+|---|---|
+| Info | Opens a card with the session info (player, game, executor, counts) |
+| Search | Filters the feed with the search box |
+| Refresh | Rebuilds the feed (spins while it works) |
+| Copy | Copies the whole summary to the clipboard |
+| Print | Prints it in the console and writes `RebelUI_summary.txt` |
+| Save | Saves it to a file (spins while it works) |
+| Share | Copies a Discord-ready code block |
+| Export | Saves everything as JSON (spins while it works) |
+
+**Async buttons.** Give an icon button `Async = true` and its icon turns into the loading icon: it spins slow, then fast for 5 seconds, then slow, then stops, and repeats until your callback calls `done(true)` (or `done(false)` to flash a failure). The spinner shows for at least 1.5 seconds.
 
 ```lua
-Win:LogAction("Teleported", "to spawn")            -- add your own line
-local list = Win:GetActions()                      -- { { Time, Title, Detail }, ... }
 local text = Win:GetSummaryText()                  -- all actions and alerts as one text
 Tab:Toggle({ Name = "Quiet", NoLog = true })       -- keep one element out of the summary
-Tab:IconButtons({ { Icon = UI.Icons.refresh, Name = "Refresh", Callback = function() end }, { Icon = UI.Icons.copy, Name = "Copy" } })
+Tab:IconButtons({
+	{ Icon = UI.Icons.refresh, Name = "Refresh", Async = true, Callback = function(done)
+		task.wait(2) -- your slow work
+		done(true)
+	end },
+	{ Icon = UI.Icons.copy, Name = "Copy", Callback = function() end },
+})
 ```
+
+## Locked switches and the expand button
+
+A toggle made with `Locked = true` shows a **padlock**; `obj:Lock(false)` swaps it to the **open padlock** (and back). The expand icon in the top bar is connected to the panel: it grows the window to nearly full screen and turns into the minimize icon; tap again to restore. In code: `Win:Maximize(true)` / `Win:Maximize(false)`.
 
 ## White icons
 
-The black icons need a red tile. For icons with **nothing behind them**, upload the PNGs from `the "white icons" folder in RebelUI needs.zip` to Roblox and list their ids in the `WHITE` table at the top of `Example.lua` (or `UI.Icons.key = 123456`). White icons are drawn with no tile.
+Roblox cannot recolor black images, so RebelUI now **whitens them itself**: it downloads each icon once, turns every pixel white (keeping the shape), saves it in `RebelUI_icons/` and shows that. The result is a clean white icon with nothing behind it. This needs your executor to allow `getcustomasset` and web access to Roblox asset delivery; if it cannot, the icon falls back to the soft white glow (`UI.IconGlow = false` turns the glow off, `UI.IconTile = true` gives a solid tile). `UI.AutoWhite = false` switches whitening off. You can also upload the PNGs from the "white icons" folder and list their ids in the `WHITE` table at the top of `Example.lua`.
 
 ## What is not in here (and why)
 
