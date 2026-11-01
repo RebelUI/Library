@@ -2415,7 +2415,7 @@ Together with the open animations, click ripples, boom, confetti, shake, shimmer
 ## Your icon pack, rich text, Activate cover and toggle styles
 
 **Icons.** `UI.Icons` holds your uploaded Roblox images: `silent save file copy downloads refresh link info printer share notification ringing padlock openpadlock loading calendar key elements expand minimize wrench right up left star`.
-The icons are black, so the library draws them on a light rounded tile and they stay visible on the dark panel.
+Your black icons sit on a red tile so they stay readable (`UI.IconTileColor = Color3.fromRGB(...)` changes the color). `UI.Icons.test` is a transparent one and shows with no tile. `UI.IconTile = false` turns every tile off (use white / transparent PNGs).
 
 ```lua
 Win:CreateTab({ Name = "Tools", Icon = UI.Icons.wrench })
@@ -2459,6 +2459,24 @@ Main:Open(); Main:Close(); Main:Toggle() -- Main.IsOpen
 ```
 
 Tab buttons also slide a little to the right when you hover them.
+
+## Music, crosshair, image ids, loading picker and effects
+
+```lua
+Tab:MusicPlayer({ Presets = { { Name = "My song", Id = 123456 }, { Name = "A link", Url = "https://example.com/song.mp3" } }, Volume = 0.5 })
+-- paste a Roblox audio id or a direct .mp3 / .ogg link (downloaded once, kept in RebelUI_audio). Play, Pause, Stop, Volume, Loop.
+local cross = Tab:CrosshairPicker({ Shape = "Cross", Color = "Red" })
+-- shapes: Cross, Plus, Dot, Circle, Square, Diamond, X, Custom image (your own Roblox image id or png link). Colors, Rainbow, size, thickness, gap, opacity, spin.
+Tab:AssetPicker({ Name = "Image id or link", Callback = function(src) end }) -- shows the picture so you can check it
+Tab:LoadingPicker({ File = "MyHub_prefs.json", Base = { Title = "My Hub", Logo = 1, Banner = 2, Video = "https://.../intro.mp4" } })
+-- pick Full cover / Video / Logo only / Minimal / Custom (your own image id, image link or .mp4 link). Saved, used next run:
+local prefs = UI.LoadPrefs("MyHub_prefs.json", { Style = "Full cover" })
+local L = UI:Loading(UI.StartupOptions({ Title = "My Hub", Banner = 2, Video = "https://.../intro.mp4" }, prefs))
+Win:SetPageAnimation("Rise") -- Slide up, Rise, From left, From right, Zoom, None
+Win:SetTrail(true, "Rainbow") -- sparkles follow your finger (Win:SetTrail(false) stops)
+```
+
+`Example.lua` has all of these on the **Media** tab (inside Main). Song links need an executor with `getcustomasset`; plain Roblox audio ids work everywhere (many old audio ids are private now, so test yours).
 
 ## What is not in here (and why)
 
