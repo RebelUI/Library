@@ -205,9 +205,9 @@ function RebelUI._iconFix(img, src, tint)
 		img.BackgroundColor3 = tint or Color3.fromRGB(236, 236, 242)
 		img.ScaleType = Enum.ScaleType.Fit
 		pcall(function()
-			Instance.new("UICorner", img).CornerRadius = UDim.new(0, 5)
+			Instance.new("UICorner", img).CornerRadius = UDim.new(0, 3)
 			local pd = Instance.new("UIPadding", img)
-			pd.PaddingTop, pd.PaddingBottom, pd.PaddingLeft, pd.PaddingRight = UDim.new(0, 2), UDim.new(0, 2), UDim.new(0, 2), UDim.new(0, 2)
+			pd.PaddingTop, pd.PaddingBottom, pd.PaddingLeft, pd.PaddingRight = UDim.new(0, 1), UDim.new(0, 1), UDim.new(0, 1), UDim.new(0, 1)
 		end)
 	end
 end
@@ -1990,8 +1990,8 @@ function Window:Notify(o)
 	if o.Icon then
 		hparent = new("Frame", { Size = UDim2.new(1, 0, 0, 18), BackgroundTransparency = 1, ZIndex = 31, LayoutOrder = 1 }, card)
 		new("ImageLabel", {
-			Size = UDim2.fromOffset(16, 16),
-			Position = UDim2.fromOffset(0, 1),
+			Size = UDim2.fromOffset(13, 13),
+			Position = UDim2.fromOffset(0, 2),
 			BackgroundTransparency = 1,
 			Image = asset(o.Icon),
 			ZIndex = 32,
@@ -2460,24 +2460,24 @@ function Window:CreateTabGroup(o)
 	corner(head, 8)
 	local hg = new("UIGradient", {}, head)
 	local arrow = new("ImageLabel", {
-		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 6, 0.5, 0), Size = UDim2.fromOffset(18, 18), BackgroundTransparency = 1,
+		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.fromOffset(13, 13), BackgroundTransparency = 1,
 		Image = asset(RebelUI.Icons.right), ScaleType = Enum.ScaleType.Fit, ZIndex = 4,
 	}, head)
 	RebelUI._iconFix(arrow, RebelUI.Icons.right)
 	local arrowDown
 	if RebelUI.Icons.down then
 		arrowDown = new("ImageLabel", {
-			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 6, 0.5, 0), Size = UDim2.fromOffset(18, 18), BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.fromOffset(13, 13), BackgroundTransparency = 1,
 			Image = asset(RebelUI.Icons.down), ScaleType = Enum.ScaleType.Fit, ImageTransparency = 1, ZIndex = 4,
 		}, head)
 		RebelUI._iconFix(arrowDown, RebelUI.Icons.down)
 		arrowDown.BackgroundTransparency = 1
 	end
-	local tx = 30
+	local tx = 26
 	if o.Icon then
-		local ic = new("ImageLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 28, 0.5, 0), Size = UDim2.fromOffset(16, 16), BackgroundTransparency = 1, Image = asset(o.Icon), ScaleType = Enum.ScaleType.Fit, ZIndex = 4 }, head)
+		local ic = new("ImageLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 26, 0.5, 0), Size = UDim2.fromOffset(12, 12), BackgroundTransparency = 1, Image = asset(o.Icon), ScaleType = Enum.ScaleType.Fit, ZIndex = 4 }, head)
 		RebelUI._iconFix(ic, o.Icon)
-		tx = 50
+		tx = 42
 	end
 	local name = label(head, g.Name, 12, C.Text, true)
 	name.Position = UDim2.new(0, tx, 0, 0)
@@ -2639,9 +2639,9 @@ function Window:CreateTab(name, icon)
 	local img
 	if opts.Icon then
 		img = new("ImageLabel", {
-			Size = UDim2.fromOffset(16, 16),
+			Size = UDim2.fromOffset(12, 12),
 			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 7, 0.5, 0),
+			Position = UDim2.new(0, 8, 0.5, 0),
 			BackgroundTransparency = 1,
 			Image = asset(opts.Icon),
 			ImageColor3 = C.Dim,
@@ -2649,7 +2649,7 @@ function Window:CreateTab(name, icon)
 			ZIndex = 4,
 		}, btn)
 		RebelUI._iconFix(img, opts.Icon)
-		pad = 28
+		pad = 24
 	end
 	local txt = label(btn, tab.Name, 11, C.Dim, false)
 	txt.Font = Enum.Font.GothamMedium
@@ -3168,7 +3168,7 @@ function Tab:Toggle(o)
 			BackgroundTransparency = 1,
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.new(0, 10, 0.5, 0),
-			Size = UDim2.fromOffset(18, 18),
+			Size = UDim2.fromOffset(13, 13),
 			Image = asset(ico),
 			ScaleType = Enum.ScaleType.Fit,
 		}, row)
@@ -11080,15 +11080,15 @@ function RebelUI:Activate(o)
 		pcall(RebelUI._imageEffect, lg, "Float", theme)
 		y = 108
 	end
-	local title = new("TextLabel", { Position = UDim2.fromOffset(0, y), Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1, Text = F(o.Title or "Rebelwar", "Bold"), TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.GothamBlack, TextSize = 30, ZIndex = 6 }, box)
-	new("TextLabel", { Position = UDim2.fromOffset(0, y + 42), Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, Text = o.Text or F("tap to activate", "Italic"), TextColor3 = Color3.fromRGB(210, 210, 220), Font = Enum.Font.GothamMedium, TextSize = 14, ZIndex = 6 }, box)
+	local title = new("TextLabel", { Position = UDim2.fromOffset(0, y), Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1, Text = (o.Title or "Rebelwar"), TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.GothamBlack, TextSize = 30, ZIndex = 6 }, box)
+	new("TextLabel", { Position = UDim2.fromOffset(0, y + 42), Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, Text = o.Text or "Tap to activate", TextColor3 = Color3.fromRGB(210, 210, 220), Font = Enum.Font.GothamMedium, TextSize = 14, ZIndex = 6 }, box)
 	local btn = new("TextButton", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, y + 84), Size = UDim2.fromOffset(240, 58), BackgroundColor3 = theme.Glow, AutoButtonColor = false, Text = "", ZIndex = 6 }, box)
 	corner(btn, 14)
 	local stroke = new("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 2, Transparency = 0.4 }, btn)
 	local lock = new("ImageLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 14, 0.5, 0), Size = UDim2.fromOffset(30, 30), BackgroundTransparency = 1, Image = asset(RebelUI.Icons.padlock), ZIndex = 7 }, btn)
 	corner(lock, 8)
 	RebelUI._iconFix(lock, RebelUI.Icons.padlock)
-	local lbl = new("TextLabel", { Position = UDim2.fromOffset(52, 0), Size = UDim2.new(1, -60, 1, 0), BackgroundTransparency = 1, Text = o.Button or F("ACTIVATE", "Bold"), TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.GothamBlack, TextSize = 20, ZIndex = 7 }, btn)
+	local lbl = new("TextLabel", { Position = UDim2.fromOffset(52, 0), Size = UDim2.new(1, -60, 1, 0), BackgroundTransparency = 1, Text = o.Button or "ACTIVATE", TextColor3 = Color3.new(1, 1, 1), Font = Enum.Font.GothamBlack, TextSize = 20, ZIndex = 7 }, btn)
 	local sc = new("UIScale", { Scale = 1 }, btn)
 	pcall(function()
 		TweenService:Create(sc, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.05 }):Play()
@@ -11108,8 +11108,8 @@ function RebelUI:Activate(o)
 		pcall(function()
 			lock.Image = asset(RebelUI.Icons.openpadlock)
 		end)
-		lbl.Text = F("ACTIVATED", "Bold")
-		pcall(RebelUI.Boom, sg, { Color = theme.Glow, Count = 40, Text = o.BoomText or F("LETS GO!", "Bold") })
+		lbl.Text = "ACTIVATED"
+		pcall(RebelUI.Boom, sg, { Color = theme.Glow, Count = 40, Text = o.BoomText or "LET'S GO!" })
 		task.delay(0.9, function()
 			finish(true)
 		end)
