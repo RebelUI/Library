@@ -43,7 +43,7 @@ end
 
 -- normal text everywhere (some phones draw fancy letters as boxes). Optional: UI.FancyText = "Bold" turns on styled letters.
 
--- White icons (from "the "white icons" folder in RebelUI needs.zip", uploaded to Roblox): paste their asset ids here and they replace the black ones.
+-- White icons (from "RebelUI white icons.zip", uploaded to Roblox): paste their asset ids here and they replace the black ones.
 -- White icons show with NO tile behind them. Leave a name out (or 0) to keep the old black icon on its red tile.
 local WHITE = {
 	-- key = 0, padlock = 0, openpadlock = 0, notification = 0, wrench = 0, elements = 0, star = 0, right = 0, down = 0,
@@ -314,6 +314,11 @@ local function buildElements(Elements)
 	Elements:Toggle({ Name = "Plain switch" })
 	Elements:Toggle({ Name = "Name + description", Description = "A second line of small text under the name", Default = true })
 	Elements:Toggle({ Name = "Toggle with the key icon", Icon = UI.Icons.key })
+	-- a toggle that can be locked shows a padlock; unlock it and the padlock opens
+	local lockedT = Elements:Toggle({ Name = "Locked feature", Description = "Tap Unlock below", Locked = true })
+	Elements:Button({ Name = "Unlock / lock it", Callback = function()
+		lockedT:Lock(not lockedT.Locked)
+	end })
 	Elements:Toggle({ Name = "Check style", Style = "Check" })
 	Elements:Toggle({ Name = "Heart style", Style = "Heart" })
 	Elements:Toggle({ Name = "With an icon", Description = "A Roblox image on the left", Icon = ICON.ESP })
