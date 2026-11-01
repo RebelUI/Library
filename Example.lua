@@ -36,13 +36,12 @@ if not fn then
 	return
 end
 local okRun, UI = pcall(fn)
-if not okRun or type(UI) ~= "table" or not UI.Loading or not UI.CreateWindow or not UI.KeyGate or not UI.Fancy or not UI.Activate or not UI.Icons then
-	problem("source.lua in the repo is an OLD version. Upload the new source.lua (it must contain UI.Activate / UI.Fancy / UI.Icons) to the main branch.")
+if not okRun or type(UI) ~= "table" or not UI.Loading or not UI.CreateWindow or not UI.KeyGate or not UI.Activate or not UI.Icons then
+	problem("source.lua in the repo is an OLD version. Upload the new source.lua (it must contain UI.Activate / UI.Icons) to the main branch.")
 	return
 end
 
--- every label and button in the panel is shown in bold serif letters (𝐥𝐢𝐤𝐞 𝐭𝐡𝐢𝐬). nil = normal text. Styles: Bold, BoldItalic, BoldScript, Mono, Sans, SansBold ...
-UI.FancyText = "Bold"
+-- normal text everywhere (some phones draw fancy letters as boxes). Optional: UI.FancyText = "Bold" turns on styled letters.
 
 -- ============================================================ DEVELOPER SWITCH
 -- SCRIPT_ON = true  -> the script works.   SCRIPT_ON = false -> it does nothing when someone runs it.
@@ -120,7 +119,7 @@ local function keyGateOptions(save)
 		Keys = KEYS,
 		Save = save, -- true remembers the key on this device
 		Boom = true, -- explosion effect when the key is right
-		BoomText = UI.Fancy("LETS GO!", "Bold"),
+		BoomText = "LET'S GO!",
 		Theme = "Red",
 	}
 end
@@ -195,7 +194,7 @@ stage("Starting...", 0.05)
 -- download both videos FIRST (first run only, they are kept after that), then play the logo video
 local logoVid
 if VIDEO then
-	Load:Status(UI.Fancy("downloading the intro", "Bold") .. " ...")
+	Load:Status("Downloading the intro...")
 	local t0 = os.clock()
 	while not vidReady and os.clock() - t0 < 25 do
 		task.wait(0.1)
@@ -308,8 +307,6 @@ local function buildElements(Elements)
 	Elements:Section("1. Toggles")
 	Elements:Toggle({ Name = "Plain switch" })
 	Elements:Toggle({ Name = "Name + description", Description = "A second line of small text under the name", Default = true })
-	-- rich text + your icon pack: UI.Fancy(text, style) and UI.Icons.key / padlock / notification / wrench / star ...
-	Elements:Label(UI.Fancy("lets go!", "Bold") .. "   " .. UI.Fancy("lets go!", "BoldItalic") .. "   " .. UI.Fancy("lets go!", "Mono"))
 	Elements:Toggle({ Name = "Toggle with the key icon", Icon = UI.Icons.key })
 	Elements:Toggle({ Name = "Check style", Style = "Check" })
 	Elements:Toggle({ Name = "Heart style", Style = "Heart" })
@@ -568,14 +565,14 @@ ready = true
 Load:Finish() -- fades the loading screen out
 if USE_ACTIVATE then
 	-- big glowing Activate button over the video (padlock opens, boom). false = the switch is off.
-	local okAct = UI:Activate({ Mode = ACTIVATE_MODE, Video = logoVid, Logo = LOGO, Title = "Rebelwar", Theme = "Red", BoomText = UI.Fancy("LETS GO!", "Bold"), Timeout = 120 })
+	local okAct = UI:Activate({ Mode = ACTIVATE_MODE, Video = logoVid, Logo = LOGO, Title = "Rebelwar", Theme = "Red", BoomText = "LET'S GO!", Timeout = 120 })
 	if not okAct and UI._off then
 		return
 	end
 end
 Win:Toggle(true) -- the panel pops open
-Win:Boom({ Text = UI.Fancy("lets go!", "Bold") })
-Win:Notify({ Title = UI.Fancy("welcome", "Bold") .. ", " .. lp.DisplayName, Text = "Tap the top bar (or press RightShift) to hide or show the panel.", Duration = 5 })
+Win:Boom({ Text = "LET'S GO!" })
+Win:Notify({ Title = "Welcome, " .. lp.DisplayName, Text = "Tap the top bar (or press RightShift) to hide or show the panel.", Duration = 5 })
 end
 
 -- 2. run it. If anything goes wrong, the loading screen shows the problem and closes (it can never get stuck)
