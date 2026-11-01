@@ -43,6 +43,18 @@ end
 
 -- normal text everywhere (some phones draw fancy letters as boxes). Optional: UI.FancyText = "Bold" turns on styled letters.
 
+-- White icons (from "the "white icons" folder in RebelUI needs.zip", uploaded to Roblox): paste their asset ids here and they replace the black ones.
+-- White icons show with NO tile behind them. Leave a name out (or 0) to keep the old black icon on its red tile.
+local WHITE = {
+	-- key = 0, padlock = 0, openpadlock = 0, notification = 0, wrench = 0, elements = 0, star = 0, right = 0, down = 0,
+	-- copy = 0, refresh = 0, printer = 0, save = 0, link = 0, info = 0, share = 0, calendar = 0, downloads = 0, loading = 0,
+}
+for name, id in pairs(WHITE) do
+	if id and id ~= 0 then
+		UI.Icons[name] = id
+	end
+end
+
 -- ============================================================ DEVELOPER SWITCH
 -- SCRIPT_ON = true  -> the script works.   SCRIPT_ON = false -> it does nothing when someone runs it.
 -- SWITCH_URL (optional): a link to a text file that says "on" or "off". Change that file any time to turn the script on or off
@@ -88,31 +100,27 @@ local function keyGateOptions(save)
 		Name = "Rebelwar",
 		Title = "REBELWAR",
 		Subtitle = "Get your key, then paste it below.",
-		Image = BANNER, -- the picture on the left (any Roblox asset id)
-		Tagline = "Rebelwar  |  by prorizz196",
-		Background = BANNER, -- a picture behind the whole card...
-		BackgroundOpacity = 0.22, -- ...with its own opacity (0 to 1)
-		ImageEffect = "Shimmer", -- Shimmer, Pulse, Float, Glow, Rainbow, Spin or None
-		Logo = LOGO, -- round logo next to the title
-		LogoEffect = "Rainbow",
-		Note = "Tap Get key, finish the LootLabs steps, and paste the key here.\nThe key works for the whole day.",
+		Logo = LOGO, -- the picture at the top-left (an emoji works too: Emoji = "😃")
+		LogoEffect = "Pulse",
+		Background = BANNER, -- a faint picture behind the card
+		BackgroundOpacity = 0.2,
+		Video = VIDEO, -- optional looping video behind the card
+		Note = "Tap a button below, finish the steps, then paste the key here.\nThe key works for the whole day.",
 		NoteIcon = "📌",
 		NoteColor = "Gold", -- Green, Blue, Red, Gold, Purple, Pink, Orange, Cyan, Gray or a Color3
+		Tagline = "Rebelwar  |  by prorizz196",
 		Setup = SETUP, -- Auto / Mobile / PC: the key panel sizes itself for the device
-		Video = VIDEO, -- a silent looping video at the top-left of the card (set USE_VIDEOS = true above). nil = just the picture
-		ProviderStyle = "Row", -- "Row" = a picture button + its own colored Copy button per line, "Grid" = compact picture tiles
-		-- the four picture buttons (images load from the repo Assets folder). Put your own link in each one.
+		-- get-key buttons, two per row. Put your own link in each one (tap = the link is copied).
 		Providers = {
-			{ "LootLabs", GET_KEY_LINK }, -- picture loads from imgur
 			{ "Linkvertise", "https://linkvertise.com/your-link-here" },
+			{ "LootLabs", GET_KEY_LINK },
 			{ "Platoboost", "https://auth.platoboost.com/your-link-here" },
 			{ "Rekonise", "https://rekonise.com/your-link-here" },
-			{ "Work.ink", "https://work.ink/your-link-here" },
 		},
-		ProvidersText = "Get your key",
+		ProvidersText = "GET YOUR KEY  (tap a button: the link is copied)",
 		Buttons = {
-			{ Name = "Discord", Color = "Discord", Link = "https://discord.gg/8s7RR3wZ6b", Message = "Invite copied. Paste it in your browser." },
-			{ Name = "Help", Color = "Blue", Link = "https://discord.gg/8s7RR3wZ6b", Message = "Ask in the Discord server." },
+			{ Name = "Discord", Color = "Discord", Link = "https://discord.gg/8s7RR3wZ6b" },
+			{ Name = "Help", Color = "Blue", Link = "https://discord.gg/8s7RR3wZ6b" },
 		},
 		Keys = KEYS,
 		Save = save, -- true remembers the key on this device
