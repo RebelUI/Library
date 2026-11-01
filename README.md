@@ -2248,30 +2248,27 @@ local list = Tab:List({ Items = { "Alpha", "Beta" }, Multi = true, Search = true
 local tbl = Tab:Table({ Columns = { "Player", "Kills" }, Rows = { { "Ava", 12 }, { "Ben", 7 } }, PageSize = 8 }) -- tap a header to sort; tbl:SetRows(rows) tbl:AddRow(row)
 ```
 
-## Key screen with an image, a note and colored buttons (`UI:KeyGate`)
+## The key panel (`UI:KeyGate`)
+
+A card with your logo (or an emoji) and the hub name at the top, a colored note, three steps (1 Get key, 2 Paste, 3 Verify), the get-key buttons two per row, a key box, a Verify button, a "Remember my key" tick, a tries counter, extra buttons (Discord, Help) and a small tagline. Tap a get-key button and its link is copied with a green COPIED flash. Wrong key: the card shakes. Right key: the padlock opens and it booms.
 
 ```lua
 local ok, key = UI:KeyGate({
 	Name = "Rebelwar", Title = "REBELWAR", Subtitle = "Get your key, then paste it below.",
-	Image = 125144167121839,       -- the picture on the left (any Roblox asset id). The card is wide: picture left, form right
-	Tagline = "Rebelwar | by prorizz196",   -- small text under the logo on the picture
-	Background = 125144167121839,  -- a picture behind the whole card...
-	BackgroundOpacity = 0.22,      -- ...with its own opacity (0 to 1)
-	Particles = true,              -- floating dots (false = off)
-	ImageEffect = "Shimmer",       -- Shimmer, Pulse, Float, Glow, Rainbow, Spin or None
-	Logo = 114659273298746,        -- round logo next to the title
-	LogoEffect = "Rainbow",
-	Note = "Tap Get key, finish the LootLabs steps, and paste the key here.",
-	NoteIcon = "📌",
-	NoteColor = "Gold",            -- Green, Blue, Red, Gold, Purple, Pink, Orange, Cyan, Gray, Discord or a Color3
-	Link = "https://lootlabs.gg/your-link-here", LinkName = "Get key (LootLabs)", LinkColor = "Green", -- copies the link
-	Buttons = {                    -- as many colored buttons as you like, two per row
-		{ Name = "Discord", Color = "Discord", Link = "https://discord.gg/8s7RR3wZ6b" },
-		{ Name = "Help", Color = Color3.fromRGB(52, 120, 235), Callback = function() print("help") end },
+	Logo = 114659273298746,        -- top-left picture (or Emoji = "😃")
+	Background = 125144167121839,  -- a faint picture behind the card (BackgroundOpacity = 0.2). Video = "https://...mp4" also works
+	Note = "Tap a button, finish the steps, paste the key here.", NoteIcon = "📌", NoteColor = "Gold",
+	Providers = {                  -- two per row. Pictures for Linkvertise, LootLabs, Platoboost, Rekonise, Work.ink are built in
+		{ "Linkvertise", "https://linkvertise.com/your-link" },
+		{ "LootLabs", "https://lootlabs.gg/your-link" },
+		{ "Blah", "https://example.com", Image = 123456, Color = Color3.fromRGB(80, 80, 255) }, -- your own button
 	},
+	Buttons = { { Name = "Discord", Color = "Discord", Link = "https://discord.gg/8s7RR3wZ6b" }, { Name = "Help", Color = "Blue", Link = "https://discord.gg/8s7RR3wZ6b" } },
+	Tagline = "Rebelwar | by prorizz196",
 	Keys = { "REBEL-DEMO" },       -- or: Check = function(key) return key == "..." end (ask your own server)
-	Save = false,                  -- true remembers the key on this device
-	Boom = true, BoomText = "WELCOME", -- explosion when the key is right (Boom = false turns it off)
+	Save = true,                   -- the player can untick "Remember my key"
+	MaxTries = 5,                  -- closes after 5 wrong keys (leave out for unlimited)
+	Boom = true, BoomText = "LET'S GO!",
 })
 if not ok then return end
 ```
@@ -2362,7 +2359,7 @@ When it is OFF, `CreateWindow` and `KeyGate` also do nothing, so even a script t
 local ok = UI:KeyGate({
 	Name = "My Hub", Title = "MY HUB", Keys = { "ABC-123" },
 	Providers = {
-		{ "LootLabs", "https://lootlabs.gg/your-link" }, -- picture: https://i.imgur.com/fu6ONgE.png
+		{ "LootLabs", "https://lootlabs.gg/your-link" }, -- picture: https://i.imgur.com/CCNfGa7.png
 		{ "Linkvertise", "https://linkvertise.com/your-link" },
 		{ "Platoboost", "https://auth.platoboost.com/your-link" },
 		{ "Rekonise", "https://rekonise.com/your-link" },
@@ -2375,7 +2372,7 @@ local ok = UI:KeyGate({
 if not ok then return end
 ```
 
-**Rows with their own Copy button, and a video on the left.** Each provider is one line: its picture plus a **Copy** button in the provider's own color. Add `ProviderStyle = "Grid"` for compact tiles instead. `Video = "https://.../clip.mp4"` plays a silent looping video at the top-left of the card (it falls back to the picture if the executor can't play it). The card also has a blinking LIVE chip with the setup and executor, a scan line down the left side and a shimmering title.
+**Get-key buttons.** Two per row; tapping one copies its link. Linkvertise and LootLabs use your new button pictures.
 
 The key panel opens with a boom, the form slides in row by row, a line draws under the title, a shine sweeps over Continue, the ring pulses and a wrong key shakes the card. `ReduceMotion = true` turns it all off.
 
@@ -2477,6 +2474,22 @@ Win:SetTrail(true, "Rainbow") -- sparkles follow your finger (Win:SetTrail(false
 ```
 
 `Example.lua` has all of these on the **Media** tab (inside Main). Song links need an executor with `getcustomasset`; plain Roblox audio ids work everywhere (many old audio ids are private now, so test yours).
+
+## Summary tab: everything the player did, plus Refresh / Copy / Print / Save
+
+`Win:CreateNotificationsTab()` is the Summary. It lists every alert **and every action**: toggles ("Turned Aimbot ON"), sliders ("Set Speed to 55"), dropdowns, buttons, inputs, keybinds and tab changes. Keys and passwords typed in an Input are shown as `(hidden)`. Four icon buttons sit on top: **Refresh**, **Copy** (to the clipboard), **Print** (console and `RebelUI_summary.txt`) and **Save**.
+
+```lua
+Win:LogAction("Teleported", "to spawn")            -- add your own line
+local list = Win:GetActions()                      -- { { Time, Title, Detail }, ... }
+local text = Win:GetSummaryText()                  -- all actions and alerts as one text
+Tab:Toggle({ Name = "Quiet", NoLog = true })       -- keep one element out of the summary
+Tab:IconButtons({ { Icon = UI.Icons.refresh, Name = "Refresh", Callback = function() end }, { Icon = UI.Icons.copy, Name = "Copy" } })
+```
+
+## White icons
+
+The black icons need a red tile. For icons with **nothing behind them**, upload the PNGs from `the "white icons" folder in RebelUI needs.zip` to Roblox and list their ids in the `WHITE` table at the top of `Example.lua` (or `UI.Icons.key = 123456`). White icons are drawn with no tile.
 
 ## What is not in here (and why)
 
