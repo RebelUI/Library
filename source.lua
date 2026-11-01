@@ -1465,12 +1465,12 @@ function RebelUI:CreateWindow(o)
 	}, main)
 	local pageTitle = label(content, "", 12, C.Text, true)
 	local hasSearch = o.Search ~= false
-	pageTitle.Size = UDim2.new(1, hasSearch and -166 or -54, 0, 22)
+	pageTitle.Size = UDim2.new(1, hasSearch and -196 or -84, 0, 22)
 	pageTitle.Position = UDim2.fromOffset(4, 4)
 	if hasSearch then
 		local sb = new("TextBox", {
 			AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -56, 0, 6),
+			Position = UDim2.new(1, -84, 0, 6), -- stays left of the expand, - and X buttons
 			Size = UDim2.fromOffset(104, 18),
 			BorderSizePixel = 0,
 			Text = "",
@@ -1491,7 +1491,7 @@ function RebelUI:CreateWindow(o)
 		end)
 	end
 	local underline = new("Frame", {
-		Size = UDim2.new(1, -58, 0, 2),
+		Size = UDim2.new(1, -86, 0, 2),
 		Position = UDim2.fromOffset(4, 26),
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		BorderSizePixel = 0,
@@ -1518,7 +1518,7 @@ function RebelUI:CreateWindow(o)
 	local closeBtn = smallButton("X", -26, 12, Color3.fromRGB(235, 40, 50))
 	win._closeBtn = closeBtn
 	-- expand / restore button, connected to the panel (Win:Maximize)
-	local expBtn = new("ImageButton", { Size = UDim2.fromOffset(16, 16), Position = UDim2.new(1, -74, 0, 4), BackgroundTransparency = 1, Image = asset(RebelUI.Icons.expand), ScaleType = Enum.ScaleType.Fit, AutoButtonColor = false, ZIndex = 5 }, content)
+	local expBtn = new("ImageButton", { Size = UDim2.fromOffset(16, 16), Position = UDim2.new(1, -78, 0, 4), BackgroundTransparency = 1, Image = asset(RebelUI.Icons.expand), ScaleType = Enum.ScaleType.Fit, AutoButtonColor = false, ZIndex = 5 }, content)
 	RebelUI._iconFix(expBtn, RebelUI.Icons.expand)
 	win._expandBtn = expBtn
 
@@ -7344,8 +7344,11 @@ function RebelUI:KeyGate(o)
 		RebelUI._iconFix(lockI, RebelUI.Icons.padlock)
 		gl = label(go, o.ButtonText or "VERIFY KEY", 14, C.White, true)
 		gl.Font = Enum.Font.GothamBlack
-		gl.Size = UDim2.fromScale(1, 1)
-		gl.ZIndex = 3
+		gl.Position = UDim2.fromOffset(46, 0) -- the text lives between the padlock (left) and an equal margin (right)
+		gl.Size = UDim2.new(1, -92, 1, 0)
+		gl.TextXAlignment = Enum.TextXAlignment.Center
+		gl.TextTruncate = Enum.TextTruncate.AtEnd
+		gl.ZIndex = 4
 		local shine = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(-0.3, 0.5), Size = UDim2.new(0, 30, 1.6, 0), Rotation = 20, BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.78, BorderSizePixel = 0, ZIndex = 4 }, go)
 		task.spawn(function()
 			task.wait(0.9)
