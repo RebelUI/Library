@@ -192,17 +192,26 @@ RebelUI.Icons = {
 	printer = 82923631400917, share = 92335044119803, notification = 125753537841173, ringing = 126612245577406,
 	padlock = 124786828881533, openpadlock = 101866153472892, loading = 117902004624996, calendar = 103661816948286,
 	key = 97014133087839, elements = 81398540814546, expand = 117887360495259, minimize = 92738514605920,
-	wrench = 139235132677195, right = 139553391725025, up = 138186535538448, left = 87498021827607, star = 85275169714542,
+	wrench = 139235132677195, test = 118555594943008, right = 139553391725025, up = 138186535538448, left = 87498021827607, star = 85275169714542,
 }
 local blackIcons = {}
-for _, id in pairs(RebelUI.Icons) do
-	blackIcons[tostring(id)] = true
+for name, id in pairs(RebelUI.Icons) do
+	if name ~= "test" then -- "test" is the transparent white one: no tile
+		blackIcons[tostring(id)] = true
+	end
 end
+-- RebelUI.IconTile = true puts a colored tile behind each icon (your black icons need one). false = icons alone (use white / transparent PNGs).
+-- RebelUI.IconTileColor = the tile color (default a bright red so black icons stay readable on the dark red panel).
+RebelUI.IconTile = true
+RebelUI.IconTileColor = Color3.fromRGB(226, 52, 62)
 function RebelUI._iconFix(img, src, tint)
+	if not RebelUI.IconTile then
+		return
+	end
 	local k = tostring(src or ""):match("%d+")
 	if img and k and blackIcons[k] then
 		img.BackgroundTransparency = 0
-		img.BackgroundColor3 = tint or Color3.fromRGB(236, 236, 242)
+		img.BackgroundColor3 = tint or RebelUI.IconTileColor
 		img.ScaleType = Enum.ScaleType.Fit
 		pcall(function()
 			Instance.new("UICorner", img).CornerRadius = UDim.new(0, 3)
@@ -2710,9 +2719,8 @@ function Window:CreateTab(name, icon)
 		if opts.Group and not opts.Group.IsOpen and not tab._auto then
 			opts.Group:Open() -- selecting a tab inside a closed group opens the group
 		end
-		page.Position = UDim2.fromOffset(0, 40)
 		page.Visible = true
-		tween(page, 0.22, { Position = UDim2.fromOffset(0, 32) })
+		RebelUI._pageIn(win, page)
 		if win._stagger then
 			win:_stagger(page)
 		end
@@ -4168,7 +4176,7 @@ function Tab:Header(o)
 		}, row)
 		corner(holder, 9)
 		win:_bind(holder, "BackgroundColor3", "Inset")
-		new("ImageLabel", {
+		local hico = new("ImageLabel", {
 			BackgroundTransparency = 1,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.fromScale(0.5, 0.5),
@@ -4176,6 +4184,7 @@ function Tab:Header(o)
 			Image = asset(o.Icon),
 			ScaleType = Enum.ScaleType.Fit,
 		}, holder)
+		RebelUI._iconFix(hico, o.Icon)
 		left = 54
 	end
 	local title = label(row, o.Title or "Header", 13, C.Text, true)
@@ -11133,6 +11142,505 @@ function RebelUI:Activate(o)
 	task.wait(0.5)
 	sg:Destroy()
 	return result == true
+end
+
+-- ============================================================ saved choices, music, custom crosshair, asset preview, loading picker, trail
+-- RebelUI.LoadPrefs(file, defaults) -> table     RebelUI.SavePrefs(file, table)   (a small json file in your executor's workspace folder)
+function RebelUI.LoadPrefs(file, defaults)
+	local out = {}
+	for k, v in pairs(defaults or {}) do
+		out[k] = v
+	end
+	pcall(function()
+		if isfile and isfile(file) then
+			local t = game:GetService("HttpService"):JSONDecode(readfile(file))
+			if type(t) == "table" then
+				for k, v in pairs(t) do
+					out[k] = v
+				end
+			end
+		end
+	end)
+	return out
+end
+function RebelUI.SavePrefs(file, t)
+	pcall(function()
+		if writefile then
+			writefile(file, game:GetService("HttpService"):JSONEncode(t))
+		end
+	end)
+end
+
+-- RebelUI.LoadingStyles = the choices. RebelUI.StartupOptions(baseLoadingOptions, prefs) -> Loading options for the chosen style
+RebelUI.LoadingStyles = { "Full cover", "Video", "Logo only", "Minimal", "Custom" }
+local function isVideoLink(s)
+	s = tostring(s or ""):lower()
+	return s:find("%.mp4") ~= nil or s:find("%.webm") ~= nil or s:find("%.mov") ~= nil
+end
+function RebelUI.StartupOptions(base, p)
+	local o = {}
+	for k, v in pairs(base or {}) do
+		o[k] = v
+	end
+	local s = (p and p.Style) or "Full cover"
+	if s == "Full cover" then
+		o.Video = nil
+	elseif s == "Video" then
+		-- keeps base.Video
+	elseif s == "Logo only" then
+		o.Video, o.Banner = nil, nil
+	elseif s == "Minimal" then
+		o.Video, o.Banner, o.Logo, o.Subtitle = nil, nil, nil, nil
+	elseif s == "Custom" then
+		local c = tostring((p and p.Custom) or ""):gsub("^%s+", ""):gsub("%s+$", "")
+		if c ~= "" then
+			if isVideoLink(c) then
+				o.Video = c
+			else
+				o.Video = nil
+				o.Banner = c
+				if c:match("^https?://") then
+					local okR, a = pcall(RebelUI.ResolveImage, c)
+					o.Banner = okR and a or base.Banner
+				end
+			end
+		end
+	end
+	return o
+end
+
+-- ---------------------------------------------------------------- audio
+local function resolveAudio(src)
+	src = tostring(src or ""):gsub("^%s+", ""):gsub("%s+$", "")
+	if src == "" then
+		return nil, "type a song id or link first"
+	end
+	local id = src:match("^rbxassetid://(%d+)$") or src:match("^(%d+)$") or src:match("roblox%.com/.-/(%d+)")
+	if id and not src:match("^https?://[^r]") then
+		return "rbxassetid://" .. id
+	end
+	if src:match("^rbxasset") then
+		return src
+	end
+	if not src:match("^https?://") then
+		return nil, "that is not an id or a link"
+	end
+	if not (writefile and getcustomasset and isfile) then
+		return nil, "your executor can't play song links (no getcustomasset). Use a Roblox audio id"
+	end
+	local sum = 0
+	for i = 1, #src do
+		sum = (sum * 31 + src:byte(i)) % 4294967291
+	end
+	local ext = src:lower():match("%.(mp3)") or src:lower():match("%.(ogg)") or src:lower():match("%.(wav)") or "mp3"
+	pcall(function()
+		if makefolder and not isfolder("RebelUI_audio") then
+			makefolder("RebelUI_audio")
+		end
+	end)
+	local path = "RebelUI_audio/" .. tostring(sum) .. "." .. ext
+	if not isfile(path) then
+		local okG, body = pcall(function()
+			return game:HttpGet(src)
+		end)
+		if not okG or type(body) ~= "string" or #body < 2000 or body:sub(1, 1) == "<" then
+			return nil, "could not download that link (it must be a direct .mp3 / .ogg file)"
+		end
+		if #body > 30000000 then
+			return nil, "that file is too big (30 MB max)"
+		end
+		pcall(writefile, path, body)
+	end
+	local okA, a = pcall(getcustomasset, path)
+	if not okA or not a then
+		return nil, "your executor could not load the file"
+	end
+	return a
+end
+RebelUI.ResolveAudio = resolveAudio
+
+-- Tab:MusicPlayer({ Presets = { { Name = "My song", Id = 123 }, { Name = "Link", Url = "https://...mp3" } }, Volume = 0.5, Loop = false })
+-- Song id (Roblox audio), or a direct .mp3 / .ogg link (downloaded once, then kept). Returns p with :Play(src) :Pause() :Stop() :SetVolume(0-1) .Sound
+function Tab:MusicPlayer(o)
+	o = o or {}
+	local win = self.Win
+	local snd = Instance.new("Sound")
+	snd.Name, snd.Volume, snd.Looped = "RebelUI_Music", o.Volume or 0.5, o.Loop == true
+	snd.Parent = game:GetService("SoundService")
+	local p = { Sound = snd }
+	local cur = ""
+	self:Section(o.Title or "Music")
+	local status = self:Label("Nothing playing. Paste a song id or a .mp3 link, then tap Play.")
+	local function say(t)
+		pcall(function()
+			status:Set(t)
+		end)
+	end
+	function p:Play(src)
+		src = src or cur
+		task.spawn(function()
+			say("Loading...")
+			local a, why = resolveAudio(src)
+			if not a then
+				say(why or "could not load")
+				pcall(function()
+					win:Notify({ Type = "warn", Title = "Music", Text = why or "could not load" })
+				end)
+				return
+			end
+			snd:Stop()
+			snd.SoundId = a
+			local t0 = os.clock()
+			while not snd.IsLoaded and os.clock() - t0 < 12 do
+				task.wait(0.1)
+			end
+			if not snd.IsLoaded then
+				say("That song would not load (wrong id, or it is private).")
+				return
+			end
+			snd:Play()
+			say("Playing: " .. tostring(src):sub(1, 48))
+		end)
+	end
+	function p:Pause()
+		if snd.IsPlaying then
+			snd:Pause()
+			say("Paused")
+		else
+			snd:Resume()
+			say("Playing")
+		end
+	end
+	function p:Stop()
+		snd:Stop()
+		say("Stopped")
+	end
+	function p:SetVolume(v)
+		snd.Volume = math.clamp(v, 0, 1)
+	end
+	if o.Presets and #o.Presets > 0 then
+		local names, by = {}, {}
+		for _, s in ipairs(o.Presets) do
+			names[#names + 1] = s.Name
+			by[s.Name] = s.Url or s.Id
+		end
+		self:Dropdown({ Name = "Songs", Options = names, Callback = function(n)
+			cur = tostring(by[n] or "")
+			p:Play(cur)
+		end })
+	end
+	self:Input({ Name = "Song id or link", Placeholder = "123456 or https://...mp3", Callback = function(t)
+		cur = tostring(t or "")
+	end })
+	self:Button({ Name = "Play", Callback = function()
+		p:Play(cur)
+	end })
+	self:Button({ Name = "Pause / Resume", Callback = function()
+		p:Pause()
+	end })
+	self:Button({ Name = "Stop", Callback = function()
+		p:Stop()
+	end })
+	self:Slider({ Name = "Volume", Min = 0, Max = 100, Default = math.floor((o.Volume or 0.5) * 100), Suffix = "%", Callback = function(v)
+		p:SetVolume(v / 100)
+	end })
+	self:Toggle({ Name = "Loop", Default = o.Loop == true, Callback = function(on)
+		snd.Looped = on
+	end })
+	return p
+end
+
+-- ---------------------------------------------------------------- crosshair
+RebelUI.CrosshairShapes = { "Cross", "Plus", "Dot", "Circle", "Square", "Diamond", "X", "Custom image" }
+RebelUI.CrosshairColors = { Red = Color3.fromRGB(255, 50, 60), White = Color3.fromRGB(255, 255, 255), Green = Color3.fromRGB(70, 255, 110), Cyan = Color3.fromRGB(60, 230, 255), Yellow = Color3.fromRGB(255, 225, 60), Pink = Color3.fromRGB(255, 90, 200), Orange = Color3.fromRGB(255, 150, 40), Rainbow = false }
+-- Tab:CrosshairPicker({ Shape, Color, Size, Thickness, Gap, Opacity, Image }) : shapes, colors, size, a spinner, and YOUR OWN image
+-- (a Roblox asset id, or a link to a png). Returns c with :Set({ ... }) :Enable(bool) :Destroy()
+function Tab:CrosshairPicker(o)
+	o = o or {}
+	local win = self.Win
+	local RunService = game:GetService("RunService")
+	local st = { On = o.Enabled ~= false and o.Enabled ~= nil and o.Enabled or false, Shape = o.Shape or "Cross", Color = o.Color or "Red", Size = o.Size or 24, Thick = o.Thickness or 2, Gap = o.Gap or 4, Alpha = o.Opacity or 100, Image = o.Image or "", Spin = false }
+	local gui = new("ScreenGui", { Name = "RebelUI_Cross", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 996, Enabled = false })
+	gui.Parent = pickParent()
+	local hold = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(300, 300), BackgroundTransparency = 1, Active = false }, gui)
+	local paints = {}
+	local c = {}
+	local function bar(x, y, w, h, rot)
+		local f = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, x, 0.5, y), Size = UDim2.fromOffset(w, h), BorderSizePixel = 0, Rotation = rot or 0 }, hold)
+		paints[#paints + 1] = { f, "BackgroundColor3", "BackgroundTransparency" }
+		return f
+	end
+	local function draw()
+		for _, ch in ipairs(hold:GetChildren()) do
+			ch:Destroy()
+		end
+		paints = {}
+		local s, t, g = st.Size, st.Thick, st.Gap
+		local shape = st.Shape
+		if shape == "Cross" or shape == "Plus" then
+			local len = s
+			if shape == "Plus" then
+				bar(0, 0, len * 2 + g * 2, t)
+				bar(0, 0, t, len * 2 + g * 2)
+			else
+				bar(-(g + len / 2), 0, len, t)
+				bar(g + len / 2, 0, len, t)
+				bar(0, -(g + len / 2), t, len)
+				bar(0, g + len / 2, t, len)
+			end
+		elseif shape == "Dot" then
+			local d = bar(0, 0, math.max(t * 2, 4), math.max(t * 2, 4))
+			new("UICorner", { CornerRadius = UDim.new(1, 0) }, d)
+		elseif shape == "Circle" or shape == "Square" or shape == "Diamond" then
+			local f = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(s * 2, s * 2), BackgroundTransparency = 1, Rotation = shape == "Diamond" and 45 or 0 }, hold)
+			if shape == "Circle" then
+				new("UICorner", { CornerRadius = UDim.new(1, 0) }, f)
+			end
+			local sk = new("UIStroke", { Thickness = t, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, f)
+			paints[#paints + 1] = { sk, "Color", "Transparency" }
+		elseif shape == "X" then
+			bar(0, 0, s * 2, t, 45)
+			bar(0, 0, s * 2, t, -45)
+		elseif shape == "Custom image" then
+			local img = new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(s * 2, s * 2), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit }, hold)
+			paints[#paints + 1] = { img, "ImageColor3", "ImageTransparency", true }
+			if tostring(st.Image) ~= "" then
+				RebelUI.SetImage(img, st.Image)
+			end
+		end
+	end
+	local conn
+	local hue = 0
+	local function paint(dt)
+		local col = RebelUI.CrosshairColors[st.Color]
+		if col == false or col == nil then
+			hue = (hue + (dt or 0) * 0.4) % 1
+			col = Color3.fromHSV(hue, 0.9, 1)
+		end
+		local tr = 1 - st.Alpha / 100
+		for _, pnt in ipairs(paints) do
+			local inst, prop, tprop, isImg = pnt[1], pnt[2], pnt[3], pnt[4]
+			if inst.Parent then
+				if isImg and st.Color == "White" then
+					inst[prop] = Color3.new(1, 1, 1)
+				else
+					inst[prop] = col
+				end
+				inst[tprop] = tr
+			end
+		end
+		if st.Spin then
+			hold.Rotation = (hold.Rotation + (dt or 0) * 180) % 360
+		else
+			hold.Rotation = 0
+		end
+	end
+	local function refresh()
+		gui.Enabled = st.On
+		if st.On and not conn then
+			conn = RunService.RenderStepped:Connect(paint)
+		elseif not st.On and conn then
+			conn:Disconnect()
+			conn = nil
+		end
+		draw()
+		paint(0)
+	end
+	function c:Set(t)
+		for k, v in pairs(t or {}) do
+			st[k] = v
+		end
+		refresh()
+	end
+	function c:Enable(on)
+		st.On = on == true
+		refresh()
+	end
+	function c:Destroy()
+		if conn then
+			conn:Disconnect()
+		end
+		gui:Destroy()
+	end
+	self:Section(o.Title or "Crosshair")
+	self:Toggle({ Name = "Crosshair on screen", Default = st.On, Callback = function(on)
+		c:Enable(on)
+	end })
+	self:Dropdown({ Name = "Shape", Options = RebelUI.CrosshairShapes, Default = st.Shape, Callback = function(v)
+		c:Set({ Shape = v })
+	end })
+	local colorNames = { "Red", "White", "Green", "Cyan", "Yellow", "Pink", "Orange", "Rainbow" }
+	self:Dropdown({ Name = "Color", Options = colorNames, Default = st.Color, Callback = function(v)
+		c:Set({ Color = v })
+	end })
+	self:Slider({ Name = "Size", Min = 3, Max = 80, Default = st.Size, Callback = function(v)
+		c:Set({ Size = v })
+	end })
+	self:Slider({ Name = "Thickness", Min = 1, Max = 10, Default = st.Thick, Callback = function(v)
+		c:Set({ Thick = v })
+	end })
+	self:Slider({ Name = "Gap", Min = 0, Max = 30, Default = st.Gap, Callback = function(v)
+		c:Set({ Gap = v })
+	end })
+	self:Slider({ Name = "Opacity", Min = 10, Max = 100, Default = st.Alpha, Suffix = "%", Callback = function(v)
+		c:Set({ Alpha = v })
+	end })
+	self:Toggle({ Name = "Spin", Default = false, Callback = function(on)
+		c:Set({ Spin = on })
+	end })
+	self:Input({ Name = "Your image (id or link)", Placeholder = "Roblox image id or https://...png", Default = tostring(st.Image), Callback = function(t)
+		c:Set({ Image = t, Shape = (tostring(t) ~= "" and "Custom image" or st.Shape) })
+	end })
+	draw()
+	refresh()
+	return c
+end
+
+-- Tab:AssetPicker({ Name, Default, Callback(src) }) : type a Roblox image id or a link and SEE it before you use it
+function Tab:AssetPicker(o)
+	o = o or {}
+	local win = self.Win
+	local row = self:_row(86)
+	local nm = label(row, o.Name or "Image id or link", 11, C.Text, true)
+	nm.Position = UDim2.fromOffset(10, 4)
+	nm.Size = UDim2.new(1, -20, 0, 16)
+	local prev = new("ImageLabel", { Position = UDim2.fromOffset(10, 24), Size = UDim2.fromOffset(54, 54), BackgroundTransparency = 0.6, BackgroundColor3 = Color3.fromRGB(30, 20, 22), ScaleType = Enum.ScaleType.Fit }, row)
+	corner(prev, 8)
+	local box = new("TextBox", { Position = UDim2.new(0, 74, 0, 30), Size = UDim2.new(1, -84, 0, 26), BackgroundColor3 = Color3.fromRGB(26, 18, 20), BorderSizePixel = 0, Text = tostring(o.Default or ""), PlaceholderText = "123456 or https://...png", PlaceholderColor3 = C.Dim, TextColor3 = C.Text, TextSize = 10, Font = Enum.Font.Gotham, ClearTextOnFocus = false }, row)
+	corner(box, 6)
+	local msg = label(row, "", 9, C.Dim, false)
+	msg.Position = UDim2.new(0, 74, 0, 60)
+	msg.Size = UDim2.new(1, -84, 0, 16)
+	local obj = {}
+	local function load(t)
+		t = tostring(t or "")
+		prev.Image = ""
+		if t == "" then
+			msg.Text = ""
+			return
+		end
+		msg.Text = "Loading..."
+		RebelUI.SetImage(prev, t, function(ok)
+			msg.Text = ok and "Looks good. White box = the image has white in it." or "Could not load that image."
+		end)
+		if o.Callback then
+			task.spawn(o.Callback, t)
+		end
+	end
+	box.FocusLost:Connect(function()
+		load(box.Text)
+	end)
+	if box.Text ~= "" then
+		load(box.Text)
+	end
+	function obj:Get()
+		return box.Text
+	end
+	function obj:Set(v)
+		box.Text = tostring(v)
+		load(v)
+	end
+	return register(self, { Text = o.Name }, obj, "AssetPicker")
+end
+
+-- Tab:LoadingPicker({ File = "MyHub_prefs.json", Base = { Title, Subtitle, Logo, Banner, Video, Theme }, Notify = true })
+-- Choose the loading screen: Full cover, Video, Logo only, Minimal, or Custom (your own image id / link, or a .mp4 link). Saved for next time.
+function Tab:LoadingPicker(o)
+	o = o or {}
+	local win = self.Win
+	local file = o.File or "RebelUI_prefs.json"
+	local prefs = RebelUI.LoadPrefs(file, { Style = "Full cover", Custom = "" })
+	self:Section(o.Title or "Loading screen")
+	self:Dropdown({ Name = "Style", Options = RebelUI.LoadingStyles, Default = prefs.Style, Callback = function(v)
+		prefs.Style = v
+		RebelUI.SavePrefs(file, prefs)
+		pcall(function()
+			win:Notify({ Type = "success", Title = "Saved", Text = "Loading style: " .. v .. " (next time you run the script)" })
+		end)
+	end })
+	self:Input({ Name = "Custom (image id, image link or .mp4 link)", Placeholder = "used when Style = Custom", Default = prefs.Custom or "", Callback = function(t)
+		prefs.Custom = tostring(t or "")
+		RebelUI.SavePrefs(file, prefs)
+	end })
+	self:Button({ Name = "Preview the loading screen", Description = "Shows it for 4 seconds", Callback = function()
+		task.spawn(function()
+			local opts = RebelUI.StartupOptions(o.Base or {}, prefs)
+			opts.Name = "RebelUI_LoadingPreview"
+			local L = RebelUI:Loading(opts)
+			L:Progress(0.2)
+			task.wait(1.5)
+			L:Progress(0.7)
+			task.wait(1.5)
+			L:Finish()
+		end)
+	end })
+	return prefs
+end
+
+-- ---------------------------------------------------------------- page transitions and cursor trail
+RebelUI.PageAnimations = { "Slide up", "Rise", "From left", "From right", "Zoom", "None" }
+function RebelUI._pageIn(win, page)
+	local a = win.PageAnim or "Slide up"
+	local base = UDim2.fromOffset(0, 32)
+	if win.ReduceMotion or a == "None" then
+		page.Position = base
+		return
+	end
+	if a == "Zoom" then
+		page.Position = base
+		local sc = page:FindFirstChild("RebelZoom") or new("UIScale", { Name = "RebelZoom", Scale = 1 }, page)
+		sc.Scale = 0.93
+		tween(sc, 0.3, { Scale = 1 }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		return
+	end
+	local from = a == "Rise" and UDim2.fromOffset(0, 90) or a == "From left" and UDim2.fromOffset(-50, 32) or a == "From right" and UDim2.fromOffset(50, 32) or UDim2.fromOffset(0, 40)
+	page.Position = from
+	tween(page, a == "Rise" and 0.4 or 0.24, { Position = base }, a == "Rise" and Enum.EasingStyle.Quint or Enum.EasingStyle.Quad)
+end
+function Window:SetPageAnimation(name)
+	if table.find(RebelUI.PageAnimations, name) then
+		self.PageAnim = name
+	end
+end
+
+-- Win:SetTrail(true, Color3?) : sparkles follow your finger / mouse
+function Window:SetTrail(on, color)
+	if self._trailConn then
+		self._trailConn:Disconnect()
+		self._trailConn = nil
+	end
+	if self._trailGui then
+		self._trailGui:Destroy()
+		self._trailGui = nil
+	end
+	if not on then
+		return
+	end
+	local UIS = game:GetService("UserInputService")
+	local gui = new("ScreenGui", { Name = "RebelUI_Trail", ResetOnSpawn = false, IgnoreGuiInset = false, DisplayOrder = 9999 })
+	gui.Parent = pickParent()
+	self._trailGui = gui
+	local last, hue = 0, 0
+	self._trailConn = UIS.InputChanged:Connect(function(i)
+		if i.UserInputType ~= Enum.UserInputType.MouseMovement and i.UserInputType ~= Enum.UserInputType.Touch then
+			return
+		end
+		if self.ReduceMotion or os.clock() - last < 0.02 then
+			return
+		end
+		last = os.clock()
+		hue = (hue + 0.02) % 1
+		local col = color or (self.Theme and self.Theme.Glow) or Color3.fromRGB(255, 70, 80)
+		if color == "Rainbow" then
+			col = Color3.fromHSV(hue, 0.8, 1)
+		end
+		local d = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(i.Position.X, i.Position.Y), Size = UDim2.fromOffset(12, 12), BackgroundColor3 = col, BorderSizePixel = 0, Active = false }, gui)
+		new("UICorner", { CornerRadius = UDim.new(1, 0) }, d)
+		tween(d, 0.5, { Size = UDim2.fromOffset(2, 2), BackgroundTransparency = 1 })
+		task.delay(0.55, function()
+			d:Destroy()
+		end)
+	end)
 end
 
 return RebelUI
