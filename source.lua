@@ -1,4 +1,4 @@
- --[[
+--[[
     RebelUI v1.0.0  ·  made by prorizz196  ·  MIT license
     The panel library behind Rebelwar. Mobile friendly. Made for Roblox executors.
     Same look as the Rebelwar Hub: spinning ring, embers, glowing tabs, shiny buttons,
@@ -237,6 +237,65 @@ function RebelUI.Fancy(text, style)
 		out[#out + 1] = c
 	end
 	return table.concat(out)
+end
+
+
+-- RebelUI.FancyText = "Bold"  -> EVERY label and button text in RebelUI screens is shown in that style (𝐁𝐨𝐥𝐝 𝐬𝐞𝐫𝐢𝐟 letters).
+-- Set it BEFORE Loading / CreateWindow. nil = off. Search still works (typed letters are matched against the plain text).
+local PLAIN = {}
+for _, def in pairs(FANCY) do
+	for i = 0, 25 do
+		PLAIN[utf8.char(def[1] + i)] = string.char(65 + i)
+		PLAIN[utf8.char(def[2] + i)] = string.char(97 + i)
+	end
+	if def[3] then
+		for i = 0, 9 do
+			PLAIN[utf8.char(def[3] + i)] = tostring(i)
+		end
+	end
+end
+PLAIN[utf8.char(0x210E)] = "h"
+function RebelUI._plain(text)
+	text = tostring(text or "")
+	if not text:find("[\240-\244]") and not text:find("\226") and not text:find("\239") then
+		return text
+	end
+	local out = {}
+	for _, cp in utf8.codes(text) do
+		local ch = utf8.char(cp)
+		out[#out + 1] = PLAIN[ch] or ch
+	end
+	return table.concat(out)
+end
+function RebelUI._fancyGui(gui)
+	local style = RebelUI.FancyText
+	if not style or not gui then
+		return
+	end
+	local function hook(o)
+		if not (o:IsA("TextLabel") or o:IsA("TextButton")) then
+			return
+		end
+		local function fix()
+			local t = o.Text
+			if t ~= "" then
+				local f = RebelUI.Fancy(RebelUI._plain(t), style)
+				if f ~= t then
+					o.Text = f
+				end
+			end
+		end
+		pcall(fix)
+		pcall(function()
+			o:GetPropertyChangedSignal("Text"):Connect(function()
+				pcall(fix)
+			end)
+		end)
+	end
+	for _, d in ipairs(gui:GetDescendants()) do
+		hook(d)
+	end
+	gui.DescendantAdded:Connect(hook)
 end
 
 local function label(parent, str, size, color, bold)
@@ -761,6 +820,7 @@ function RebelUI:Loading(o)
 		sg.ScreenInsets = Enum.ScreenInsets.None
 	end)
 	sg.Parent = pickParent()
+	RebelUI._fancyGui(sg)
 
 	local root = new("Frame", {
 		Size = UDim2.fromScale(1, 1),
@@ -1221,6 +1281,7 @@ function RebelUI:CreateWindow(o)
 		gui.ScreenInsets = Enum.ScreenInsets.None
 	end)
 	gui.Parent = pickParent()
+	RebelUI._fancyGui(gui)
 	win.Gui = gui
 
 	win._click = new("Sound", { SoundId = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.6 }, gui)
@@ -2355,7 +2416,7 @@ function Window:_filter(q)
 			local match = false
 			if row:IsA("Frame") or row:IsA("TextButton") then
 				for _, d in ipairs(row:GetDescendants()) do
-					if (d:IsA("TextLabel") or d:IsA("TextButton")) and d.Text ~= "" and d.Text:lower():find(q, 1, true) then
+					if (d:IsA("TextLabel") or d:IsA("TextButton")) and d.Text ~= "" and RebelUI._plain(d.Text):lower():find(q, 1, true) then
 						match = true
 						break
 					end
@@ -2384,6 +2445,165 @@ function Window:CreateTabDivider(text)
 	return l
 end
 
+-- Win:CreateTabGroup({ Name = "Main", Open = false, Icon = optional })
+-- A folder in the tab list. Its arrow (UI.Icons.right) turns down when you tap it and the tabs inside slide down with a fade.
+-- g:CreateTab({ Name, Icon, ... }) puts a tab inside. g:Open() g:Close() g:Toggle() g.IsOpen. If you upload a Down image, set UI.Icons.down = id
+-- and it is used for the open arrow instead of turning the right arrow.
+function Window:CreateTabGroup(o)
+	o = type(o) == "string" and { Name = o } or (o or {})
+	local win = self
+	local g = { Win = win, Name = o.Name or "Group", IsOpen = false, _n = 0 }
+	local order = (#win._tabs + 1) * 10
+	local head = new("TextButton", {
+		Size = UDim2.new(1, 0, 0, 28), BackgroundColor3 = C.White, BackgroundTransparency = 1, Text = "", AutoButtonColor = false, LayoutOrder = order,
+	}, win._tabList)
+	corner(head, 8)
+	local hg = new("UIGradient", {}, head)
+	local arrow = new("ImageLabel", {
+		AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 6, 0.5, 0), Size = UDim2.fromOffset(18, 18), BackgroundTransparency = 1,
+		Image = asset(RebelUI.Icons.right), ScaleType = Enum.ScaleType.Fit, ZIndex = 4,
+	}, head)
+	RebelUI._iconFix(arrow, RebelUI.Icons.right)
+	local arrowDown
+	if RebelUI.Icons.down then
+		arrowDown = new("ImageLabel", {
+			AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 6, 0.5, 0), Size = UDim2.fromOffset(18, 18), BackgroundTransparency = 1,
+			Image = asset(RebelUI.Icons.down), ScaleType = Enum.ScaleType.Fit, ImageTransparency = 1, ZIndex = 4,
+		}, head)
+		RebelUI._iconFix(arrowDown, RebelUI.Icons.down)
+		arrowDown.BackgroundTransparency = 1
+	end
+	local tx = 30
+	if o.Icon then
+		local ic = new("ImageLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 28, 0.5, 0), Size = UDim2.fromOffset(16, 16), BackgroundTransparency = 1, Image = asset(o.Icon), ScaleType = Enum.ScaleType.Fit, ZIndex = 4 }, head)
+		RebelUI._iconFix(ic, o.Icon)
+		tx = 50
+	end
+	local name = label(head, g.Name, 12, C.Text, true)
+	name.Position = UDim2.new(0, tx, 0, 0)
+	name.Size = UDim2.new(1, -tx - 34, 1, 0)
+	name.ZIndex = 4
+	local chip = new("TextLabel", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.fromOffset(22, 16), BackgroundTransparency = 0.2, Text = "0", Font = Enum.Font.GothamBold, TextSize = 10, TextColor3 = C.White, ZIndex = 4 }, head)
+	corner(chip, 8)
+	local box = new("Frame", { Size = UDim2.new(1, 0, 0, 0), BackgroundTransparency = 1, ClipsDescendants = true, LayoutOrder = order + 1, Visible = false }, win._tabList)
+	new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }, box)
+	new("UIPadding", { PaddingLeft = UDim.new(0, 10) }, box)
+	g._box, g._head = box, head
+	local function paint()
+		local t = win.Theme
+		hg.Color = ColorSequence.new(t.Accent, t.Dark:Lerp(t.Accent, 0.4))
+		chip.BackgroundColor3 = t.Accent
+	end
+	paint()
+	if win._onTheme then
+		win:_onTheme(paint)
+	end
+	function g:_resize()
+		chip.Text = tostring(g._n)
+		if g.IsOpen then
+			box.Size = UDim2.new(1, 0, 0, g._n * 28)
+		end
+	end
+	local function fadeKids(toOut, step)
+		local i = 0
+		for _, b in ipairs(box:GetChildren()) do
+			if b:IsA("TextButton") then
+				i += 1
+				local sc = b:FindFirstChild("RebelGrp") or new("UIScale", { Name = "RebelGrp", Scale = 1 }, b)
+				if toOut then
+					tween(sc, 0.12, { Scale = 0.85 })
+				else
+					sc.Scale = 0.8
+				end
+				for _, d in ipairs(b:GetChildren()) do
+					local prop = d:IsA("TextLabel") and "TextTransparency" or d:IsA("ImageLabel") and "ImageTransparency" or nil
+					if prop then
+						if not toOut then
+							d[prop] = 1
+						end
+						task.delay(toOut and 0 or (i - 1) * step, function()
+							tween(d, toOut and 0.12 or 0.28, { [prop] = toOut and 1 or 0 })
+						end)
+					end
+				end
+				if not toOut then
+					task.delay((i - 1) * step, function()
+						tween(sc, 0.35, { Scale = 1 }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+					end)
+				end
+			end
+		end
+	end
+	function g:Open()
+		if g.IsOpen then
+			return
+		end
+		g.IsOpen = true
+		local fast = win.ReduceMotion
+		box.Visible = true
+		if arrowDown then
+			tween(arrow, 0.2, { ImageTransparency = 1 })
+			tween(arrowDown, 0.2, { ImageTransparency = 0 })
+		else
+			tween(arrow, fast and 0 or 0.35, { Rotation = 90 }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		end
+		tween(box, fast and 0 or 0.4, { Size = UDim2.new(1, 0, 0, g._n * 28) }, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+		if not fast then
+			fadeKids(false, 0.06)
+		end
+	end
+	function g:Close()
+		if not g.IsOpen then
+			return
+		end
+		g.IsOpen = false
+		if arrowDown then
+			tween(arrow, 0.2, { ImageTransparency = 0 })
+			tween(arrowDown, 0.2, { ImageTransparency = 1 })
+		else
+			tween(arrow, win.ReduceMotion and 0 or 0.3, { Rotation = 0 }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		end
+		if not win.ReduceMotion then
+			fadeKids(true)
+		end
+		tween(box, win.ReduceMotion and 0 or 0.28, { Size = UDim2.new(1, 0, 0, 0) }, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
+		task.delay(win.ReduceMotion and 0 or 0.3, function()
+			if not g.IsOpen then
+				box.Visible = false
+			end
+		end)
+	end
+	function g:Toggle()
+		if g.IsOpen then
+			g:Close()
+		else
+			g:Open()
+		end
+	end
+	function g:CreateTab(t, icon)
+		local opts = type(t) == "table" and t or { Name = t, Icon = icon }
+		local copy = {}
+		for k, v in pairs(opts) do
+			copy[k] = v
+		end
+		copy.Group = g
+		return win:CreateTab(copy)
+	end
+	head.MouseEnter:Connect(function()
+		tween(head, 0.15, { BackgroundTransparency = 0.7 })
+	end)
+	head.MouseLeave:Connect(function()
+		tween(head, 0.2, { BackgroundTransparency = 1 })
+	end)
+	head.Activated:Connect(function()
+		g:Toggle()
+	end)
+	if o.Open then
+		g:Open()
+	end
+	return g
+end
+
 function Window:CreateTab(name, icon)
 	-- CreateTab("Main", 123456)  or  CreateTab({ Name=, Icon=, Title=, Description= })
 	local opts = type(name) == "table" and name or { Name = name, Icon = icon }
@@ -2398,9 +2618,13 @@ function Window:CreateTab(name, icon)
 		BackgroundTransparency = 1,
 		Text = "",
 		AutoButtonColor = false,
-		LayoutOrder = (#win._tabs + 1) * 10,
-	}, win._tabList)
+		LayoutOrder = opts.Group and (opts.Group._n + 1) or (#win._tabs + 1) * 10,
+	}, opts.Group and opts.Group._box or win._tabList)
 	corner(btn, 8)
+	if opts.Group then
+		opts.Group._n += 1
+		opts.Group:_resize()
+	end
 	local bg = new("UIGradient", {}, btn)
 	local ind = new("Frame", {
 		Size = UDim2.fromOffset(3, 0),
@@ -2432,6 +2656,15 @@ function Window:CreateTab(name, icon)
 	txt.Position = UDim2.new(0, pad, 0, 0)
 	txt.Size = UDim2.new(1, -pad - 4, 1, 0)
 	txt.ZIndex = 4
+
+	btn.MouseEnter:Connect(function()
+		if not win.ReduceMotion then
+			tween(txt, 0.18, { Position = UDim2.new(0, pad + 4, 0, 0) }, Enum.EasingStyle.Quad)
+		end
+	end)
+	btn.MouseLeave:Connect(function()
+		tween(txt, 0.2, { Position = UDim2.new(0, pad, 0, 0) }, Enum.EasingStyle.Quad)
+	end)
 
 	-- ---------- the page
 	local page = new("ScrollingFrame", {
@@ -2473,6 +2706,9 @@ function Window:CreateTab(name, icon)
 		end
 		if win._search and win._search.Text ~= "" then
 			win._search.Text = ""
+		end
+		if opts.Group and not opts.Group.IsOpen and not tab._auto then
+			opts.Group:Open() -- selecting a tab inside a closed group opens the group
 		end
 		page.Position = UDim2.fromOffset(0, 40)
 		page.Visible = true
@@ -2550,7 +2786,9 @@ function Window:CreateTab(name, icon)
 		})
 	end
 	if #win._tabs == 1 then
+		tab._auto = true -- the first page shows itself, but a closed folder stays closed
 		tab:Select()
+		tab._auto = nil
 	end
 	return tab
 end
@@ -6697,6 +6935,7 @@ function RebelUI:KeyGate(o)
 		gui.ScreenInsets = Enum.ScreenInsets.None
 	end)
 	gui.Parent = pickParent()
+	RebelUI._fancyGui(gui)
 	local back = new("TextButton", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundColor3 = Color3.new(0, 0, 0),
@@ -7433,6 +7672,7 @@ function Window:GameAssistant(o)
 		gui.ScreenInsets = Enum.ScreenInsets.None
 	end)
 	gui.Parent = pickParent()
+	RebelUI._fancyGui(gui)
 	hud.Gui = gui
 
 	local root = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0 }, gui)
@@ -10816,6 +11056,7 @@ function RebelUI:Activate(o)
 		sg.ScreenInsets = Enum.ScreenInsets.None
 	end)
 	sg.Parent = pickParent()
+	RebelUI._fancyGui(sg)
 	local root = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(6, 3, 5), BackgroundTransparency = cover and 0 or 0.35, BorderSizePixel = 0, Active = true, ZIndex = 1 }, sg)
 	if cover and o.Video then
 		pcall(function()
