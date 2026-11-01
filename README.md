@@ -2071,7 +2071,7 @@ The panel keeps gliding a little when you let go while dragging (`Inertia = fals
 | `Example.lua` | The demo panel with the loading screen. It uses every element and every kind of toggle. Copy parts into your own script |
 | `README.md` | This tutorial |
 | `MyScript.lua` | A small starter script: copy it, change the names |
-| `DISCORD_EMBED.json` | A ready Discord embed (send it with a webhook) that points people to this README |
+| `DISCORD_POSTS.md` | Ready-to-paste posts for the `#examples` and `#documentation` channels |
 | `LICENSE` | MIT license |
 
 ## Help and community
@@ -2425,7 +2425,7 @@ Tab:Toggle({ Name = "Key", Icon = UI.Icons.key })
 
 **Rich text.** `UI.Fancy(text, style)` turns plain text into styled letters: `UI.Fancy("lets go!", "Bold")` gives 𝐥𝐞𝐭𝐬 𝐠𝐨!
 Styles: Bold, Italic, BoldItalic, BoldScript, BoldFraktur, Mono, Sans, SansBold, SansItalic, SansBoldItalic, Fullwidth, Circled.
-Use it in titles, notifications, buttons and boom text. Some phones draw a few of these letters as boxes; Bold, Mono and Sans are the safest.
+Use it in titles, notifications, buttons and boom text. **Warning:** Roblox's fonts on many phones (Delta included) draw these letters as empty boxes. Keep them OFF unless you tested your phone; `Example.lua` uses normal text. `UI.FancyText = "Bold"` would turn it on for the whole panel.
 
 **Activate cover.** A big glowing button, the padlock opens, boom, then the call returns `true` (`false` if the developer switch is off or `Timeout` runs out).
 
