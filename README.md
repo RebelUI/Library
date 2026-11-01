@@ -2071,7 +2071,7 @@ The panel keeps gliding a little when you let go while dragging (`Inertia = fals
 | `Example.lua` | The demo panel with the loading screen. It uses every element and every kind of toggle. Copy parts into your own script |
 | `README.md` | This tutorial |
 | `MyScript.lua` | A small starter script: copy it, change the names |
-| `DISCORD_POSTS.md` | Ready-to-paste posts for the `#examples` and `#documentation` channels |
+| `DISCORD_EMBED.json` | A ready Discord embed (send it with a webhook) that points people to this README |
 | `LICENSE` | MIT license |
 
 ## Help and community
@@ -2443,6 +2443,22 @@ if not ok then return end
 Switch (default), Sharp (square corners), Check (tick mark), Radio, Heart, Star, Checkbox. Slider `Style = "Sharp"` has a diamond knob.
 
 **Alerts tab.** `Win:CreateNotificationsTab({ Icon = UI.Icons.notification })` is a Summary: stat tiles, a feed of every toast, a red glow while something is still working.
+
+## Tab folders (`Win:CreateTabGroup`)
+
+A folder in the tab list, like "Main". It starts closed with the right arrow (`UI.Icons.right`). Tap it: the arrow turns down and the tabs inside slide down with a fade, one after another. Tap again and they fold back up.
+Selecting a tab that is inside a closed folder opens the folder. A small number on the right shows how many tabs are inside.
+
+```lua
+local Main = Win:CreateTabGroup({ Name = "Main", Open = false })
+Main:CreateTab({ Name = "Elements", Icon = UI.Icons.elements })
+Main:CreateTab({ Name = "Discord" })
+Main:Open(); Main:Close(); Main:Toggle() -- Main.IsOpen
+-- if you upload a Down arrow image, set it once and it is used for the open state instead of turning the right arrow:
+-- UI.Icons.down = 123456789
+```
+
+Tab buttons also slide a little to the right when you hover them.
 
 ## What is not in here (and why)
 
