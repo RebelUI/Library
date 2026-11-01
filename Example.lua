@@ -71,8 +71,6 @@ local USE_VIDEOS = true
 -- Loading videos. Paste a direct .mp4 link (a GitHub raw link is the most reliable) or a video page link:
 -- the library downloads it first (once), then plays it. Set to nil to turn a video off. Keep each under ~20 MB.
 local VIDEO = USE_VIDEOS and "https://raw.githubusercontent.com/rizqadeeb38-dev/Rebelwar_UI/assets/Logo-loading.png.mp4" or nil -- the Rebelwar logo loading video
-local USE_ACTIVATE = true -- after loading: a full-screen Activate cover with the video. "Logo" = just the logo + button. false = off
-local ACTIVATE_MODE = "Cover"
 local ICON = {
 	ESP = 71415024616002,
 	Settings = 81306187910490,
@@ -125,6 +123,12 @@ local function keyGateOptions(save)
 end
 local DISCORD = "https://discord.gg/8s7RR3wZ6b" -- the official RebelUI & Resources server
 
+-- the player's saved loading choice (Settings > Loading screen): Full cover, Video, Logo only, Minimal or Custom
+local PREFS_FILE = "Rebelwar_prefs.json"
+local prefs = UI.LoadPrefs(PREFS_FILE, { Style = VIDEO and "Video" or "Full cover", Custom = "" })
+local startup = UI.StartupOptions({ Title = "Rebelwar", Subtitle = "made by prorizz196", Logo = LOGO, Banner = BANNER, Video = VIDEO, Theme = "Red" }, prefs)
+VIDEO = startup.Video
+
 -- ============================================================ 0. start downloading the video RIGHT NOW (first run only, kept after that)
 local vidReady, vidPath = not VIDEO, nil
 if VIDEO then
@@ -147,14 +151,8 @@ pcall(function()
 	gameName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
 end)
 
-Load = UI:Loading({
-	Title = "Rebelwar",
-	Subtitle = "made by prorizz196",
-	Logo = LOGO, -- the round logo with the spinning ring
-	Banner = BANNER, -- the slow zooming picture behind everything
-	Footer = "discord.gg/8s7RR3wZ6b  |  RebelUI v" .. UI.Version,
-	Theme = "Red",
-})
+startup.Footer = "discord.gg/8s7RR3wZ6b  |  RebelUI v" .. UI.Version
+Load = UI:Loading(startup) -- Logo = the round logo with the spinning ring, Banner = the slow zooming picture behind everything
 Load:Badge(gameName) -- the small pill at the top
 
 -- Boot log + watchdog. Every step is written to RebelUI_boot.txt (in your executor's workspace folder) and shown on
@@ -510,6 +508,20 @@ end
 -- a folder in the tab list: tap the arrow (right.png turns down) and its tabs slide down. Main:CreateTab({...}) puts tabs inside.
 local Main = Win:CreateTabGroup({ Name = "Main", Open = false })
 Main:CreateTab({ Name = "Elements", Icon = UI.Icons.elements, Title = "🧩 ALL ELEMENTS", Description = "One of every element and every toggle style.", Build = buildElements })
+local Media = Main:CreateTab({ Name = "Media", Icon = UI.Icons.test, Title = "MEDIA", Description = "Songs, crosshairs, image ids, loading screen and effects.", Build = function(t)
+	t:MusicPlayer({ Presets = {}, Volume = 0.5 }) -- Presets = { { Name = "My song", Id = 123456 }, { Name = "A link", Url = "https://.../song.mp3" } }
+	t:CrosshairPicker({ Shape = "Cross", Color = "Red" }) -- shapes, colors, spin, or your own Roblox image id / link
+	t:Section("Check an image id")
+	t:AssetPicker({ Name = "Image id or link" })
+	t:LoadingPicker({ File = PREFS_FILE, Base = { Title = "Rebelwar", Subtitle = "made by prorizz196", Logo = LOGO, Banner = BANNER, Video = "https://raw.githubusercontent.com/rizqadeeb38-dev/Rebelwar_UI/assets/Logo-loading.png.mp4", Theme = "Red" } })
+	t:Section("Effects")
+	t:Dropdown({ Name = "Page animation", Options = UI.PageAnimations, Default = "Slide up", Callback = function(v)
+		Win:SetPageAnimation(v)
+	end })
+	t:Toggle({ Name = "Sparkle trail", Description = "Sparkles follow your finger", Callback = function(on)
+		Win:SetTrail(on, "Rainbow")
+	end })
+end })
 local Discord = Main:CreateTab({ Name = "Discord", Icon = ICON.Discord, Title = "💬 DISCORD", Description = "Updates, support and suggestions." })
 Discord:SetBadge("NEW") -- a small bubble on the tab button (nil removes it)
 Win:SetAssistant({ -- the full-screen HUD is built only when it is first opened
@@ -563,13 +575,6 @@ Discord:Button({
 stage("Ready!", 1)
 ready = true
 Load:Finish() -- fades the loading screen out
-if USE_ACTIVATE then
-	-- big glowing Activate button over the video (padlock opens, boom). false = the switch is off.
-	local okAct = UI:Activate({ Mode = ACTIVATE_MODE, Video = logoVid, Logo = LOGO, Title = "Rebelwar", Theme = "Red", BoomText = "LET'S GO!", Timeout = 120 })
-	if not okAct and UI._off then
-		return
-	end
-end
 Win:Toggle(true) -- the panel pops open
 Win:Boom({ Text = "LET'S GO!" })
 Win:Notify({ Title = "Welcome, " .. lp.DisplayName, Text = "Tap the top bar (or press RightShift) to hide or show the panel.", Duration = 5 })
