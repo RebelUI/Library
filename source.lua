@@ -192,33 +192,91 @@ RebelUI.Icons = {
 	printer = 82923631400917, share = 92335044119803, notification = 125753537841173, ringing = 126612245577406,
 	padlock = 124786828881533, openpadlock = 101866153472892, loading = 117902004624996, calendar = 103661816948286,
 	key = 97014133087839, elements = 81398540814546, expand = 117887360495259, minimize = 92738514605920,
-	wrench = 139235132677195, test = 118555594943008, right = 139553391725025, up = 138186535538448, left = 87498021827607, star = 85275169714542,
+	wrench = 139235132677195, test = 118555594943008, newkey = 71431118058119, search = 91325208171746, sidebar = 97218104581792, home = 83313298037903, right = 139553391725025, up = 138186535538448, left = 87498021827607, star = 85275169714542,
 }
 local blackIcons = {}
-for name, id in pairs(RebelUI.Icons) do
-	if name ~= "test" then -- "test" is the transparent white one: no tile
-		blackIcons[tostring(id)] = true
-	end
+for _, id in pairs(RebelUI.Icons) do
+	blackIcons[tostring(id)] = true
 end
--- RebelUI.IconTile = true puts a colored tile behind each icon (your black icons need one). false = icons alone (use white / transparent PNGs).
--- RebelUI.IconTileColor = the tile color (default a bright red so black icons stay readable on the dark red panel).
-RebelUI.IconTile = true
+-- Black icons cannot be recolored in Roblox, so they get a soft white GLOW behind them (no hard tile).
+-- RebelUI.IconGlow = false turns the glow off. RebelUI.IconTile = true goes back to a solid colored tile (RebelUI.IconTileColor).
+-- White / transparent icons (see the "white icons" folder) need neither: they show alone.
+RebelUI.IconTile = false
 RebelUI.IconTileColor = Color3.fromRGB(226, 52, 62)
+RebelUI.IconGlow = true
+RebelUI.IconGlowColor = Color3.fromRGB(255, 240, 240)
+local haloOf = setmetatable({}, { __mode = "k" })
+RebelUI._curId = setmetatable({}, { __mode = "k" })
 function RebelUI._iconFix(img, src, tint)
-	if not RebelUI.IconTile then
+	local k = tostring(src or ""):match("%d+")
+	if img then
+		RebelUI._curId[img] = k
+		if haloOf[img] then
+			for _, f in ipairs(haloOf[img]) do
+				pcall(function()
+					f:Destroy()
+				end)
+			end
+			haloOf[img] = nil
+		end
+	end
+	if not (img and k and blackIcons[k]) then
 		return
 	end
-	local k = tostring(src or ""):match("%d+")
-	if img and k and blackIcons[k] then
+	if RebelUI.IconTile then
 		img.BackgroundTransparency = 0
 		img.BackgroundColor3 = tint or RebelUI.IconTileColor
 		img.ScaleType = Enum.ScaleType.Fit
 		pcall(function()
 			Instance.new("UICorner", img).CornerRadius = UDim.new(0, 3)
-			local pd = Instance.new("UIPadding", img)
-			pd.PaddingTop, pd.PaddingBottom, pd.PaddingLeft, pd.PaddingRight = UDim.new(0, 1), UDim.new(0, 1), UDim.new(0, 1), UDim.new(0, 1)
 		end)
+		return
 	end
+	local halos = {}
+	haloOf[img] = halos
+	if RebelUI._whitenIcon and RebelUI._whitenIcon(img, k, halos) then
+		return -- the white version is already saved: no glow needed
+	end
+	if not RebelUI.IconGlow then
+		return
+	end
+	pcall(function()
+		local par = img.Parent
+		if not par or par:FindFirstChildOfClass("UIListLayout") then
+			return
+		end
+		local A = img.AnchorPoint or Vector2.new(0, 0)
+		local P = img.Position or UDim2.new()
+		local S = img.Size or UDim2.new()
+		for _, h in ipairs({ { 14, 0.93 }, { 9, 0.86 }, { 4, 0.72 } }) do
+			local f = Instance.new("Frame")
+			f.Name = "RebelGlow"
+			f.AnchorPoint = Vector2.new(0.5, 0.5)
+			f.Position = UDim2.new(P.X.Scale + (0.5 - A.X) * S.X.Scale, P.X.Offset + (0.5 - A.X) * S.X.Offset, P.Y.Scale + (0.5 - A.Y) * S.Y.Scale, P.Y.Offset + (0.5 - A.Y) * S.Y.Offset)
+			f.Size = UDim2.new(S.X.Scale, S.X.Offset + h[1], S.Y.Scale, S.Y.Offset + h[1])
+			f.BackgroundColor3 = RebelUI.IconGlowColor
+			f.BackgroundTransparency = h[2]
+			f.BorderSizePixel = 0
+			f.Active = false
+			f.ZIndex = math.max((img.ZIndex or 1) - 1, 0)
+			Instance.new("UICorner", f).CornerRadius = UDim.new(1, 0)
+			f.Parent = par
+			halos[#halos + 1] = f
+		end
+		img.AncestryChanged:Connect(function(_, p)
+			if not p then
+				for _, f in ipairs(halos) do
+					f:Destroy()
+				end
+			end
+		end)
+	end)
+end
+
+-- swap the picture of an icon (keeps the glow / white version in step)
+function RebelUI._setIcon(img, id)
+	img.Image = asset(id)
+	RebelUI._iconFix(img, id)
 end
 
 -- RebelUI.Fancy("lets go!", "Bold") -> 𝐥𝐞𝐭𝐬 𝐠𝐨!   Styles: Bold, Italic, BoldItalic, BoldScript, BoldFraktur, Mono, Sans, SansBold, SansItalic,
@@ -1459,6 +1517,10 @@ function RebelUI:CreateWindow(o)
 	local miniBtn = smallButton("-", -52, 16, Color3.fromRGB(120, 120, 120))
 	local closeBtn = smallButton("X", -26, 12, Color3.fromRGB(235, 40, 50))
 	win._closeBtn = closeBtn
+	-- expand / restore button, connected to the panel (Win:Maximize)
+	local expBtn = new("ImageButton", { Size = UDim2.fromOffset(16, 16), Position = UDim2.new(1, -74, 0, 4), BackgroundTransparency = 1, Image = asset(RebelUI.Icons.expand), ScaleType = Enum.ScaleType.Fit, AutoButtonColor = false, ZIndex = 5 }, content)
+	RebelUI._iconFix(expBtn, RebelUI.Icons.expand)
+	win._expandBtn = expBtn
 
 	-- ---------- notifications (slide up from the bottom, stack)
 	local notes = new("Frame", {
@@ -1717,6 +1779,9 @@ function RebelUI:CreateWindow(o)
 		end
 		win:Destroy()
 	end)
+	expBtn.MouseButton1Click:Connect(function()
+		win:Maximize()
+	end)
 	miniBtn.MouseButton1Click:Connect(function()
 		win:Toggle(false)
 	end)
@@ -1887,6 +1952,37 @@ function Window:SetSize(w, h)
 	w = math.clamp(tonumber(w) or self._baseSize[1], 320, math.max(320, vp.X * 0.96 / s))
 	h = math.clamp(tonumber(h) or self._baseSize[2], 240, math.max(240, vp.Y * 0.96 / s))
 	self.Main.Size = UDim2.fromOffset(math.floor(w), math.floor(h))
+end
+
+-- Win:Maximize(true | false | nil): fill the screen (the expand icon in the top corner) or go back. The icon turns into "minimize" while it is big.
+function Window:Maximize(on)
+	if on == nil then
+		on = not self._max
+	end
+	if (on == true) == (self._max == true) then
+		return
+	end
+	self._max = on == true
+	local main = self.Main
+	if self._max then
+		self._preSize, self._prePos = main.Size, main.Position
+		local cam = workspace.CurrentCamera
+		local vp = cam and cam.ViewportSize or Vector2.new(800, 450)
+		if vp.X < 200 or vp.Y < 150 then
+			vp = Vector2.new(800, 450)
+		end
+		local s = math.max(self.Scale or 1, 0.01)
+		local w, h = math.max(320, vp.X * 0.96 / s), math.max(240, vp.Y * 0.92 / s)
+		tween(main, self.ReduceMotion and 0 or 0.4, { Size = UDim2.fromOffset(math.floor(w), math.floor(h)), Position = UDim2.new(0.5, 0, 0.5, 0) }, Enum.EasingStyle.Quint)
+	else
+		tween(main, self.ReduceMotion and 0 or 0.4, { Size = self._preSize or main.Size, Position = self._prePos or main.Position }, Enum.EasingStyle.Quint)
+	end
+	if self._expandBtn then
+		RebelUI._setIcon(self._expandBtn, self._max and RebelUI.Icons.minimize or RebelUI.Icons.expand)
+	end
+	if self.LogAction then
+		self:LogAction(self._max and "Expanded the panel" or "Restored the panel size", nil, "read")
+	end
 end
 
 function Window:SetToggleKey(k)
@@ -3176,9 +3272,11 @@ function Tab:Toggle(o)
 	local row = self:_row(H)
 	local rowStroke = new("UIStroke", { ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Thickness = 1, Transparency = 1 }, row)
 	local left = 10
-	local ico = o.Icon or (o.Locked and RebelUI.Icons.padlock)
+	local lockIcon = o.Icon == nil and o.Locked ~= nil -- a toggle that can be locked shows a padlock; it opens when unlocked
+	local ico = o.Icon or (o.Locked ~= nil and (o.Locked and RebelUI.Icons.padlock or RebelUI.Icons.openpadlock))
+	local icoImg
 	if ico then
-		local icoImg = new("ImageLabel", {
+		icoImg = new("ImageLabel", {
 			BackgroundTransparency = 1,
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.new(0, 10, 0.5, 0),
@@ -3372,6 +3470,9 @@ function Tab:Toggle(o)
 	end
 	function obj:Lock(state)
 		self.Locked = state ~= false
+		if lockIcon and icoImg then
+			RebelUI._setIcon(icoImg, self.Locked and RebelUI.Icons.padlock or RebelUI.Icons.openpadlock)
+		end
 		render(false)
 	end
 	function obj:SetName(n)
@@ -6893,10 +6994,35 @@ local function providerInfo(name)
 	return RebelUI.Providers[k]
 end
 
+-- RebelUI.Blur(size, seconds): blurs the game behind the panels (0 removes it)
+function RebelUI.Blur(size, t)
+	pcall(function()
+		local Lighting = game:GetService("Lighting")
+		local b = Lighting:FindFirstChild("RebelUI_Blur")
+		if not b then
+			if (size or 0) <= 0 then
+				return
+			end
+			b = Instance.new("BlurEffect")
+			b.Name, b.Size = "RebelUI_Blur", 0
+			b.Parent = Lighting
+		end
+		local tw = game:GetService("TweenService"):Create(b, TweenInfo.new(t or 0.4), { Size = size or 0 })
+		tw:Play()
+		if (size or 0) <= 0 then
+			task.delay((t or 0.4) + 0.05, function()
+				if b.Parent and b.Size <= 0.5 then
+					b:Destroy()
+				end
+			end)
+		end
+	end)
+end
+
 function RebelUI:KeyGate(o)
-	-- Options: Name, Title, Subtitle, Logo (image id), Emoji, Note, NoteIcon, NoteColor, Providers = { {"Linkvertise", url}, {"LootLabs", url} },
-	-- Buttons = { {Name, Color, Link, Message} }, Keys, Check(key), Save, File, Boom, BoomText, Theme, Setup, Video, Background, Tagline,
-	-- MaxTries, Timeout, SuccessText, ReduceMotion. Returns true, key  /  false.
+	-- A WIDE card made for phones held sideways: left = logo, name, note, steps, extra buttons. right = get-key buttons, key box, Verify.
+	-- (In portrait it becomes one tall column.) Options: Name, Title, Subtitle, Logo, Emoji, Note, NoteIcon, NoteColor, Providers, Buttons, Tagline,
+	-- Keys, Check(key), Save, File, Boom, BoomText, Theme, Setup, Video, Background, BackgroundOpacity, Blur (default true), MaxTries, Timeout, ReduceMotion
 	o = o or {}
 	if RebelUI._off then
 		return false
@@ -6936,7 +7062,6 @@ function RebelUI:KeyGate(o)
 			return true, trim(saved)
 		end
 	end
-
 	local NOTE = {
 		Green = Color3.fromRGB(60, 200, 110), Blue = Color3.fromRGB(70, 140, 255), Red = Color3.fromRGB(235, 60, 70), Gold = Color3.fromRGB(255, 190, 50),
 		Purple = Color3.fromRGB(160, 90, 255), Pink = Color3.fromRGB(255, 90, 180), Orange = Color3.fromRGB(255, 140, 40), Cyan = Color3.fromRGB(50, 220, 240),
@@ -6958,7 +7083,16 @@ function RebelUI:KeyGate(o)
 	gui.Parent = pickParent()
 	RebelUI._fancyGui(gui)
 	local vp = (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize) or Vector2.new(800, 450)
-	local back = new("TextButton", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(6, 2, 4), BackgroundTransparency = 0.25, Text = "", AutoButtonColor = false, BorderSizePixel = 0 }, gui)
+	local wide = vp.X >= vp.Y * 1.1
+	if o.Layout == "Tall" then
+		wide = false
+	elseif o.Layout == "Wide" then
+		wide = true
+	end
+	if o.Blur ~= false then
+		RebelUI.Blur(o.BlurSize or 14, 0.5)
+	end
+	local back = new("TextButton", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(6, 2, 4), BackgroundTransparency = 0.3, Text = "", AutoButtonColor = false, BorderSizePixel = 0 }, gui)
 	if o.Background or o.Image then
 		new("ImageLabel", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Image = asset(o.Background or o.Image), ImageTransparency = 1 - (o.BackgroundOpacity or 0.2), ScaleType = Enum.ScaleType.Crop }, back)
 	end
@@ -6974,123 +7108,156 @@ function RebelUI:KeyGate(o)
 			end
 		end)
 	end
+	-- floating glow dots behind the card
+	if o.Particles ~= false and not o.ReduceMotion then
+		for i = 1, 14 do
+			local d = new("Frame", { Position = UDim2.fromScale(math.random(), math.random()), Size = UDim2.fromOffset(math.random(3, 7), math.random(3, 7)), BackgroundColor3 = theme.Glow, BackgroundTransparency = 0.6, BorderSizePixel = 0, ZIndex = 3 }, back)
+			corner(d, 4)
+			task.spawn(function()
+				while gui.Parent do
+					local t = math.random(40, 90) / 10
+					tween(d, t, { Position = UDim2.fromScale(math.random(), math.random()), BackgroundTransparency = math.random(5, 9) / 10 }, Enum.EasingStyle.Sine)
+					task.wait(t)
+				end
+			end)
+		end
+	end
 
-	-- ---------- sizes
-	local W = o.FormWidth or (pcSetup and 440 or 350)
 	local PAD, GAP = 14, 8
-	local provs = o.Providers or {}
-	local noteText = o.Note and tostring(o.Note) or nil
-	local noteLines = noteText and math.max(1, math.ceil(#noteText / math.floor((W - 60) / 6))) + select(2, noteText:gsub("\n", "")) or 0
-	local noteH = noteText and (16 + noteLines * 13) or 0
-	local rows = math.ceil(#provs / 2)
-	local H = PAD + 58 + GAP + (noteText and (noteH + GAP) or 0) + 24 + GAP
-	if #provs > 0 then
-		H = H + 16 + rows * 54 + GAP
-	end
-	H = H + 42 + GAP + 40 + GAP + 18 + GAP + 22
-	if o.Buttons and #o.Buttons > 0 then
-		H = H + 34 + GAP
-	end
-	if o.Tagline then
-		H = H + 16
-	end
-	H = H + PAD
-	local card = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(W, H), BackgroundColor3 = Color3.fromRGB(20, 11, 14), BorderSizePixel = 0, Active = true, ClipsDescendants = true }, back)
-	corner(card, 16)
-	local cstroke = new("UIStroke", { Color = theme.Glow, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, card)
-	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(34, 14, 18), Color3.fromRGB(16, 8, 10)) }, card)
-	local scl = new("UIScale", { Scale = 0.8 }, card)
-	local fit = math.min(1, (vp.Y * 0.94) / H, (vp.X * 0.96) / W)
-	tween(scl, 0.45, { Scale = fit }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-	local y = PAD
-	local result, savedKey = nil, nil
-
-	-- ---------- header: logo / emoji on the left, title + subtitle on the right, close button
-	local mark = new("Frame", { Position = UDim2.fromOffset(PAD, y), Size = UDim2.fromOffset(58, 58), BackgroundColor3 = Color3.fromRGB(34, 18, 22), BorderSizePixel = 0 }, card)
-	corner(mark, 14)
-	new("UIStroke", { Color = theme.Glow, Thickness = 1.5, Transparency = 0.3 }, mark)
-	if o.Logo then
-		local lg = new("ImageLabel", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Image = asset(o.Logo), ScaleType = Enum.ScaleType.Crop }, mark)
-		corner(lg, 14)
-		RebelUI._iconFix(lg, o.Logo)
-		pcall(RebelUI._imageEffect, mark, o.LogoEffect or "Pulse", theme)
+	local CW
+	if wide then
+		CW = math.min(vp.X * 0.94, o.WideWidth or (pcSetup and 820 or 720))
 	else
-		label(mark, o.Emoji or "🔑", 28, C.Text, true).Size = UDim2.fromScale(1, 1)
+		CW = math.min(vp.X * 0.96, o.FormWidth or (pcSetup and 440 or 350))
 	end
-	local tl = label(card, tostring(o.Title or "KEY SYSTEM"), pcSetup and 20 or 18, C.Text, true)
-	tl.Font = Enum.Font.GothamBlack
-	tl.Position = UDim2.fromOffset(PAD + 70, y + 4)
-	tl.Size = UDim2.new(1, -(PAD + 70 + 44), 0, 26)
-	tl.TextXAlignment = Enum.TextXAlignment.Left
-	local sl = label(card, tostring(o.Subtitle or "Get your key, then paste it below."), 10, C.Dim, false)
-	sl.Position = UDim2.fromOffset(PAD + 70, y + 32)
-	sl.Size = UDim2.new(1, -(PAD + 70 + 44), 0, 24)
-	sl.TextXAlignment = Enum.TextXAlignment.Left
-	sl.TextWrapped = true
-	sl.TextYAlignment = Enum.TextYAlignment.Top
-	local closeB = new("TextButton", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 10), Size = UDim2.fromOffset(28, 28), BackgroundColor3 = Color3.fromRGB(60, 22, 28), Text = "X", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = C.Text, AutoButtonColor = false, ZIndex = 5 }, card)
-	corner(closeB, 14)
-	closeB.MouseEnter:Connect(function()
-		tween(closeB, 0.15, { BackgroundColor3 = Color3.fromRGB(200, 40, 50) })
-	end)
-	closeB.MouseLeave:Connect(function()
-		tween(closeB, 0.15, { BackgroundColor3 = Color3.fromRGB(60, 22, 28) })
-	end)
-	y = y + 58 + GAP
+	local LW = wide and math.floor(CW * 0.4) or CW
+	local RW = wide and (CW - LW) or CW
+	local card = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(CW, 400), BackgroundColor3 = Color3.fromRGB(20, 11, 14), BorderSizePixel = 0, Active = true, ClipsDescendants = true, ZIndex = 5 }, back)
+	corner(card, 18)
+	local cstroke = new("UIStroke", { Color = theme.Glow, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, card)
+	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(36, 15, 19), Color3.fromRGB(15, 7, 9)) }, card)
+	local scl = new("UIScale", { Scale = 0.8 }, card)
+	local Lf = new("Frame", { Size = UDim2.new(0, LW, 1, 0), BackgroundTransparency = 1 }, card)
+	local Rf = new("Frame", { Position = wide and UDim2.fromOffset(LW, 0) or UDim2.fromOffset(0, 0), Size = UDim2.new(0, RW, 1, 0), BackgroundTransparency = 1 }, card)
+	if wide then
+		local dv = new("Frame", { Position = UDim2.fromOffset(LW, PAD), Size = UDim2.new(0, 1, 1, -PAD * 2), BackgroundColor3 = theme.Glow, BackgroundTransparency = 0.7, BorderSizePixel = 0 }, card)
+	end
+	local result, savedKey = nil, nil
+	local setStep, box, go, status, kst, lockI, gl, triesL
+	local remember = o.Save ~= false
 
-	-- ---------- note
-	if noteText then
+	-- ================= block: header (logo with a glow, title, subtitle)
+	local function blockHeader(p, y, W)
+		-- the glow behind the logo: soft pulsing rings in the theme color
+		local lx, ly, ls = PAD + 4, y + 2, 54
+		local rings = {}
+		for i, g in ipairs({ { 22, 0.88 }, { 14, 0.8 }, { 7, 0.68 } }) do
+			local f = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(lx + ls / 2, ly + ls / 2), Size = UDim2.fromOffset(ls + g[1], ls + g[1]), BackgroundColor3 = theme.Glow, BackgroundTransparency = g[2], BorderSizePixel = 0 }, p)
+			corner(f, 20 + g[1] / 2)
+			rings[i] = f
+		end
+		if not o.ReduceMotion then
+			task.spawn(function()
+				local out = true
+				while gui.Parent and result == nil do
+					for i, f in ipairs(rings) do
+						tween(f, 1.1, { BackgroundTransparency = out and math.min(0.97, f.BackgroundTransparency + 0.08) or math.max(0.55, f.BackgroundTransparency - 0.08) }, Enum.EasingStyle.Sine)
+					end
+					out = not out
+					task.wait(1.1)
+				end
+			end)
+		end
+		if o.Logo then
+			local lg = new("ImageLabel", { Position = UDim2.fromOffset(lx, ly), Size = UDim2.fromOffset(ls, ls), BackgroundTransparency = 1, Image = asset(o.Logo), ScaleType = Enum.ScaleType.Fit, ZIndex = 3 }, p)
+			RebelUI.SetImage(lg, o.Logo)
+			pcall(RebelUI._imageEffect, lg, o.LogoEffect or "Float", theme)
+		else
+			local em = label(p, o.Emoji or "🔑", 30, C.Text, true)
+			em.Position, em.Size = UDim2.fromOffset(lx, ly), UDim2.fromOffset(ls, ls)
+			em.ZIndex = 3
+		end
+		local tx = lx + ls + 14
+		local tl = label(p, tostring(o.Title or "KEY SYSTEM"), pcSetup and 20 or 18, C.Text, true)
+		tl.Font = Enum.Font.GothamBlack
+		tl.Position = UDim2.fromOffset(tx, y + 4)
+		tl.Size = UDim2.new(1, -(tx + PAD + (wide and 0 or 30)), 0, 26)
+		tl.TextXAlignment = Enum.TextXAlignment.Left
+		local sl = label(p, tostring(o.Subtitle or "Get your key, then paste it below."), 10, C.Dim, false)
+		sl.Position = UDim2.fromOffset(tx, y + 32)
+		sl.Size = UDim2.new(1, -(tx + PAD), 0, 26)
+		sl.TextXAlignment = Enum.TextXAlignment.Left
+		sl.TextWrapped = true
+		sl.TextYAlignment = Enum.TextYAlignment.Top
+		return y + 62 + GAP
+	end
+
+	-- ================= block: note (colored box)
+	local function blockNote(p, y, W)
+		if not o.Note then
+			return y
+		end
+		local text = (o.NoteIcon and (o.NoteIcon .. "  ") or "") .. "Note: " .. tostring(o.Note)
+		local perLine = math.max(10, math.floor((W - PAD * 2 - 30) / 6))
+		local lines = math.ceil(#text / perLine) + select(2, text:gsub("\n", ""))
+		local h = 14 + lines * 13
 		local nc = pick(o.NoteColor, Color3.fromRGB(255, 190, 50))
-		local nb = new("Frame", { Position = UDim2.fromOffset(PAD, y), Size = UDim2.new(1, -PAD * 2, 0, noteH), BackgroundColor3 = nc, BackgroundTransparency = 0.86, BorderSizePixel = 0 }, card)
+		local nb = new("Frame", { Position = UDim2.fromOffset(PAD, y), Size = UDim2.new(1, -PAD * 2, 0, h), BackgroundColor3 = nc, BackgroundTransparency = 0.86, BorderSizePixel = 0 }, p)
 		corner(nb, 10)
 		new("UIStroke", { Color = nc, Thickness = 1, Transparency = 0.5 }, nb)
 		local bar = new("Frame", { Size = UDim2.new(0, 3, 1, -10), Position = UDim2.fromOffset(6, 5), BackgroundColor3 = nc, BorderSizePixel = 0 }, nb)
 		corner(bar, 2)
-		local nt = label(nb, (o.NoteIcon and (o.NoteIcon .. "  ") or "") .. "Note: " .. noteText, 10, C.Text, false)
+		local nt = label(nb, text, 10, C.Text, false)
 		nt.Position = UDim2.fromOffset(18, 0)
 		nt.Size = UDim2.new(1, -26, 1, 0)
 		nt.TextWrapped = true
 		nt.TextXAlignment = Enum.TextXAlignment.Left
-		y = y + noteH + GAP
+		return y + h + GAP
 	end
 
-	-- ---------- steps: 1 Get key > 2 Paste > 3 Verify
-	local stepFrames = {}
-	local names = { "1  Get key", "2  Paste", "3  Verify" }
-	local sw = (W - PAD * 2 - GAP * 2) / 3
-	for i = 1, 3 do
-		local f = new("Frame", { Position = UDim2.fromOffset(PAD + (i - 1) * (sw + GAP), y), Size = UDim2.fromOffset(sw, 24), BackgroundColor3 = Color3.fromRGB(40, 24, 28), BorderSizePixel = 0 }, card)
-		corner(f, 12)
-		local tx = label(f, names[i], 10, C.Dim, true)
-		tx.Size = UDim2.fromScale(1, 1)
-		stepFrames[i] = { f, tx }
-	end
-	local function setStep(n, ok)
-		for i, s in ipairs(stepFrames) do
-			local on = i <= n
-			tween(s[1], 0.25, { BackgroundColor3 = on and (ok and Color3.fromRGB(40, 150, 80) or theme.Accent) or Color3.fromRGB(40, 24, 28) })
-			s[2].TextColor3 = on and C.White or C.Dim
+	-- ================= block: three steps
+	local function blockSteps(p, y, W)
+		local frames = {}
+		local names = { "1  Get key", "2  Paste", "3  Verify" }
+		local sw = (W - PAD * 2 - GAP * 2) / 3
+		for i = 1, 3 do
+			local f = new("Frame", { Position = UDim2.fromOffset(PAD + (i - 1) * (sw + GAP), y), Size = UDim2.fromOffset(sw, 24), BackgroundColor3 = Color3.fromRGB(40, 24, 28), BorderSizePixel = 0 }, p)
+			corner(f, 12)
+			local tx = label(f, names[i], 10, C.Dim, true)
+			tx.Size = UDim2.fromScale(1, 1)
+			frames[i] = { f, tx }
 		end
+		setStep = function(n, ok)
+			for i, s in ipairs(frames) do
+				local on = i <= n
+				tween(s[1], 0.25, { BackgroundColor3 = on and (ok and Color3.fromRGB(40, 150, 80) or theme.Accent) or Color3.fromRGB(40, 24, 28) })
+				s[2].TextColor3 = on and C.White or C.Dim
+			end
+		end
+		setStep(1)
+		return y + 24 + GAP
 	end
-	setStep(1)
-	y = y + 24 + GAP
 
-	-- ---------- get-key buttons, two per row
-	if #provs > 0 then
-		local cap = label(card, o.ProvidersText or "GET YOUR KEY  (tap a button: the link is copied)", 9, theme.Glow, true)
+	-- ================= block: get-key buttons, two per row
+	local provs = o.Providers or {}
+	local function blockProviders(p, y, W)
+		if #provs == 0 then
+			return y
+		end
+		local cap = label(p, o.ProvidersText or "GET YOUR KEY  (tap a button: the link is copied)", 9, theme.Glow, true)
 		cap.Position = UDim2.fromOffset(PAD, y)
 		cap.Size = UDim2.new(1, -PAD * 2, 0, 14)
 		cap.TextXAlignment = Enum.TextXAlignment.Left
-		y = y + 16
+		y = y + 17
 		local cw = (W - PAD * 2 - GAP) / 2
-		for i, p in ipairs(provs) do
-			local pname = type(p) == "table" and (p.Name or p[1]) or tostring(p)
-			local link = type(p) == "table" and (p.Link or p[2]) or nil
+		for i, pr in ipairs(provs) do
+			local pname = type(pr) == "table" and (pr.Name or pr[1]) or tostring(pr)
+			local link = type(pr) == "table" and (pr.Link or pr[2]) or nil
 			local info = providerInfo(pname) or {}
-			local col = (type(p) == "table" and p.Color) or info.Color or theme.Accent
-			local img = (type(p) == "table" and p.Image) or info.Image
+			local col = (type(pr) == "table" and pr.Color) or info.Color or theme.Accent
+			local img = (type(pr) == "table" and pr.Image) or info.Image
 			local r, cI = math.floor((i - 1) / 2), (i - 1) % 2
-			local b = new("TextButton", { Position = UDim2.fromOffset(PAD + cI * (cw + GAP), y + r * 54), Size = UDim2.fromOffset(cw, 48), BackgroundColor3 = col, BackgroundTransparency = 0.7, Text = "", AutoButtonColor = false, ClipsDescendants = true }, card)
+			local b = new("TextButton", { Position = UDim2.fromOffset(PAD + cI * (cw + GAP), y + r * 54), Size = UDim2.fromOffset(cw, 48), BackgroundColor3 = col, BackgroundTransparency = 0.7, Text = "", AutoButtonColor = false, ClipsDescendants = true }, p)
 			corner(b, 12)
 			local bs = new("UIStroke", { Color = col, Thickness = 1.5, Transparency = 0.35 }, b)
 			local fb = label(b, tostring(pname), 13, C.White, true)
@@ -7134,7 +7301,7 @@ function RebelUI:KeyGate(o)
 				cover.BackgroundColor3 = ok and Color3.fromRGB(30, 160, 80) or Color3.fromRGB(180, 50, 50)
 				tween(cover, 0.15, { BackgroundTransparency = 0.15 })
 				tween(ct, 0.15, { TextTransparency = 0 })
-				if ok then
+				if ok and setStep then
 					setStep(2)
 				end
 				task.delay(1.2, function()
@@ -7143,121 +7310,165 @@ function RebelUI:KeyGate(o)
 				end)
 			end)
 		end
-		y = y + rows * 54 + GAP - 6
+		return y + math.ceil(#provs / 2) * 54 + GAP - 6
 	end
 
-	-- ---------- key box (key icon, text box, clear) and the Verify button
-	local kb = new("Frame", { Position = UDim2.fromOffset(PAD, y), Size = UDim2.new(1, -PAD * 2, 0, 42), BackgroundColor3 = Color3.fromRGB(12, 6, 8), BorderSizePixel = 0 }, card)
-	corner(kb, 12)
-	local kst = new("UIStroke", { Color = Color3.fromRGB(90, 40, 48), Thickness = 1.5 }, kb)
-	local kico = new("ImageLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0), Size = UDim2.fromOffset(22, 22), BackgroundTransparency = 1, Image = asset(RebelUI.Icons.key), ScaleType = Enum.ScaleType.Fit }, kb)
-	corner(kico, 5)
-	RebelUI._iconFix(kico, RebelUI.Icons.key)
-	local box = new("TextBox", { Position = UDim2.fromOffset(40, 0), Size = UDim2.new(1, -78, 1, 0), BackgroundTransparency = 1, Text = "", PlaceholderText = "Paste your key here", PlaceholderColor3 = C.Dim, TextColor3 = C.Text, TextSize = 12, Font = Enum.Font.GothamMedium, ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Left }, kb)
-	local clr = new("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.fromOffset(24, 24), BackgroundColor3 = Color3.fromRGB(50, 26, 30), Text = "X", Font = Enum.Font.GothamBold, TextSize = 10, TextColor3 = C.Dim, AutoButtonColor = false }, kb)
-	corner(clr, 12)
-	clr.Activated:Connect(function()
-		box.Text = ""
-		setStep(1)
-	end)
-	box.Focused:Connect(function()
-		tween(kst, 0.2, { Color = theme.Glow })
-	end)
-	box:GetPropertyChangedSignal("Text"):Connect(function()
-		if result == nil and trim(box.Text) ~= "" then
-			setStep(2)
-		end
-	end)
-	y = y + 42 + GAP
-	local go = new("TextButton", { Position = UDim2.fromOffset(PAD, y), Size = UDim2.new(1, -PAD * 2, 0, 40), BackgroundColor3 = theme.Glow, Text = "", AutoButtonColor = false, ClipsDescendants = true }, card)
-	corner(go, 12)
-	local lockI = new("ImageLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), Size = UDim2.fromOffset(22, 22), BackgroundTransparency = 1, Image = asset(RebelUI.Icons.padlock), ScaleType = Enum.ScaleType.Fit, ZIndex = 3 }, go)
-	corner(lockI, 5)
-	RebelUI._iconFix(lockI, RebelUI.Icons.padlock)
-	local gl = label(go, o.ButtonText or "VERIFY KEY", 14, C.White, true)
-	gl.Font = Enum.Font.GothamBlack
-	gl.Size = UDim2.fromScale(1, 1)
-	gl.ZIndex = 3
-	local shine = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(-0.3, 0.5), Size = UDim2.new(0, 30, 1.6, 0), Rotation = 20, BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.78, BorderSizePixel = 0, ZIndex = 4 }, go)
-	y = y + 40 + GAP
-	local status = label(card, "", 10, C.Dim, true)
-	status.Position = UDim2.fromOffset(PAD, y)
-	status.Size = UDim2.new(1, -PAD * 2, 0, 18)
-	status.Text = "Waiting for your key"
-	y = y + 18 + GAP
-
-	-- remember toggle + tries
-	local remember = o.Save ~= false
-	local rm = new("TextButton", { Position = UDim2.fromOffset(PAD, y), Size = UDim2.fromOffset(150, 22), BackgroundTransparency = 1, Text = "", AutoButtonColor = false }, card)
-	local rbox = new("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.fromOffset(18, 18), BackgroundColor3 = remember and theme.Accent or Color3.fromRGB(40, 24, 28), BorderSizePixel = 0 }, rm)
-	corner(rbox, 4)
-	local rtick = label(rbox, "✔", 12, C.White, true)
-	rtick.Size = UDim2.fromScale(1, 1)
-	rtick.Visible = remember
-	local rl = label(rm, "Remember my key", 10, C.Dim, false)
-	rl.Position = UDim2.fromOffset(26, 0)
-	rl.Size = UDim2.new(1, -26, 1, 0)
-	rl.TextXAlignment = Enum.TextXAlignment.Left
-	rm.Activated:Connect(function()
-		remember = not remember
+	-- ================= block: key box, verify, status, remember, tries
+	local function blockKey(p, y, W)
+		local kb = new("Frame", { Position = UDim2.fromOffset(PAD, y), Size = UDim2.new(1, -PAD * 2, 0, 42), BackgroundColor3 = Color3.fromRGB(12, 6, 8), BorderSizePixel = 0 }, p)
+		corner(kb, 12)
+		kst = new("UIStroke", { Color = Color3.fromRGB(90, 40, 48), Thickness = 1.5 }, kb)
+		local kico = new("ImageLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), Size = UDim2.fromOffset(20, 20), BackgroundTransparency = 1, Image = asset(RebelUI.Icons.newkey), ScaleType = Enum.ScaleType.Fit }, kb)
+		RebelUI._iconFix(kico, RebelUI.Icons.newkey)
+		box = new("TextBox", { Position = UDim2.fromOffset(42, 0), Size = UDim2.new(1, -80, 1, 0), BackgroundTransparency = 1, Text = "", PlaceholderText = "Paste your key here", PlaceholderColor3 = C.Dim, TextColor3 = C.Text, TextSize = 12, Font = Enum.Font.GothamMedium, ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Left }, kb)
+		local clr = new("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.fromOffset(24, 24), BackgroundColor3 = Color3.fromRGB(50, 26, 30), Text = "X", Font = Enum.Font.GothamBold, TextSize = 10, TextColor3 = C.Dim, AutoButtonColor = false }, kb)
+		corner(clr, 12)
+		clr.Activated:Connect(function()
+			box.Text = ""
+			if setStep then
+				setStep(1)
+			end
+		end)
+		box.Focused:Connect(function()
+			tween(kst, 0.2, { Color = theme.Glow })
+		end)
+		box:GetPropertyChangedSignal("Text"):Connect(function()
+			if result == nil and trim(box.Text) ~= "" and setStep then
+				setStep(2)
+			end
+		end)
+		y = y + 42 + GAP
+		go = new("TextButton", { Position = UDim2.fromOffset(PAD, y), Size = UDim2.new(1, -PAD * 2, 0, 42), BackgroundColor3 = theme.Glow, Text = "", AutoButtonColor = false, ClipsDescendants = true }, p)
+		corner(go, 12)
+		lockI = new("ImageLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 14, 0.5, 0), Size = UDim2.fromOffset(22, 22), BackgroundTransparency = 1, Image = asset(RebelUI.Icons.padlock), ScaleType = Enum.ScaleType.Fit, ZIndex = 3 }, go)
+		RebelUI._iconFix(lockI, RebelUI.Icons.padlock)
+		gl = label(go, o.ButtonText or "VERIFY KEY", 14, C.White, true)
+		gl.Font = Enum.Font.GothamBlack
+		gl.Size = UDim2.fromScale(1, 1)
+		gl.ZIndex = 3
+		local shine = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(-0.3, 0.5), Size = UDim2.new(0, 30, 1.6, 0), Rotation = 20, BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.78, BorderSizePixel = 0, ZIndex = 4 }, go)
+		task.spawn(function()
+			task.wait(0.9)
+			while gui.Parent and result == nil do
+				shine.Position = UDim2.fromScale(-0.2, 0.5)
+				tween(shine, 0.8, { Position = UDim2.fromScale(1.2, 0.5) }, Enum.EasingStyle.Quad)
+				task.wait(1.8)
+			end
+		end)
+		y = y + 42 + GAP
+		status = label(p, "Waiting for your key", 10, C.Dim, true)
+		status.Position = UDim2.fromOffset(PAD, y)
+		status.Size = UDim2.new(1, -PAD * 2, 0, 18)
+		y = y + 18 + GAP - 2
+		local rm = new("TextButton", { Position = UDim2.fromOffset(PAD, y), Size = UDim2.fromOffset(150, 22), BackgroundTransparency = 1, Text = "", AutoButtonColor = false }, p)
+		local rbox = new("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.fromOffset(18, 18), BackgroundColor3 = remember and theme.Accent or Color3.fromRGB(40, 24, 28), BorderSizePixel = 0 }, rm)
+		corner(rbox, 4)
+		local rtick = label(rbox, "✔", 12, C.White, true)
+		rtick.Size = UDim2.fromScale(1, 1)
 		rtick.Visible = remember
-		tween(rbox, 0.15, { BackgroundColor3 = remember and theme.Accent or Color3.fromRGB(40, 24, 28) })
-	end)
-	local triesL = label(card, o.MaxTries and ("Tries 0/" .. o.MaxTries) or "", 10, C.Dim, false)
-	triesL.AnchorPoint = Vector2.new(1, 0)
-	triesL.Position = UDim2.new(1, -PAD, 0, y)
-	triesL.Size = UDim2.fromOffset(110, 22)
-	triesL.TextXAlignment = Enum.TextXAlignment.Right
-	y = y + 22 + GAP
+		local rl = label(rm, "Remember my key", 10, C.Dim, false)
+		rl.Position = UDim2.fromOffset(26, 0)
+		rl.Size = UDim2.new(1, -26, 1, 0)
+		rl.TextXAlignment = Enum.TextXAlignment.Left
+		rm.Activated:Connect(function()
+			remember = not remember
+			rtick.Visible = remember
+			tween(rbox, 0.15, { BackgroundColor3 = remember and theme.Accent or Color3.fromRGB(40, 24, 28) })
+		end)
+		triesL = label(p, o.MaxTries and ("Tries 0/" .. o.MaxTries) or "", 10, C.Dim, false)
+		triesL.AnchorPoint = Vector2.new(1, 0)
+		triesL.Position = UDim2.new(1, -PAD, 0, y)
+		triesL.Size = UDim2.fromOffset(110, 22)
+		triesL.TextXAlignment = Enum.TextXAlignment.Right
+		return y + 22 + GAP
+	end
 
-	-- extra buttons (Discord, Help ...)
-	if o.Buttons and #o.Buttons > 0 then
-		local n = #o.Buttons
-		local bw = (W - PAD * 2 - GAP * (n - 1)) / n
-		for i, bd in ipairs(o.Buttons) do
-			local col = pick(bd.Color, theme.Accent)
-			local eb = new("TextButton", { Position = UDim2.fromOffset(PAD + (i - 1) * (bw + GAP), y), Size = UDim2.fromOffset(bw, 30), BackgroundColor3 = col, BackgroundTransparency = 0.25, Text = bd.Name or "Button", Font = Enum.Font.GothamBold, TextSize = 11, TextColor3 = C.White, AutoButtonColor = false }, card)
-			corner(eb, 9)
-			eb.MouseEnter:Connect(function()
-				tween(eb, 0.15, { BackgroundTransparency = 0 })
-			end)
-			eb.MouseLeave:Connect(function()
-				tween(eb, 0.2, { BackgroundTransparency = 0.25 })
-			end)
-			eb.Activated:Connect(function()
-				local was = eb.Text
-				local ok = bd.Link and type(setclipboard) == "function" and pcall(setclipboard, bd.Link)
-				eb.Text = ok and "Copied!" or (bd.Link or "...")
-				if bd.Callback then
-					pcall(bd.Callback)
-				end
-				task.delay(1.2, function()
-					if eb.Parent then
-						eb.Text = was
-					end
+	-- ================= block: extra buttons + tagline
+	local function blockFooter(p, y, W)
+		if o.Buttons and #o.Buttons > 0 then
+			local n = #o.Buttons
+			local bw = (W - PAD * 2 - GAP * (n - 1)) / n
+			for i, bd in ipairs(o.Buttons) do
+				local col = pick(bd.Color, theme.Accent)
+				local eb = new("TextButton", { Position = UDim2.fromOffset(PAD + (i - 1) * (bw + GAP), y), Size = UDim2.fromOffset(bw, 30), BackgroundColor3 = col, BackgroundTransparency = 0.25, Text = bd.Name or "Button", Font = Enum.Font.GothamBold, TextSize = 11, TextColor3 = C.White, AutoButtonColor = false }, p)
+				corner(eb, 9)
+				eb.MouseEnter:Connect(function()
+					tween(eb, 0.15, { BackgroundTransparency = 0 })
 				end)
-			end)
+				eb.MouseLeave:Connect(function()
+					tween(eb, 0.2, { BackgroundTransparency = 0.25 })
+				end)
+				eb.Activated:Connect(function()
+					local was = eb.Text
+					local ok = bd.Link and type(setclipboard) == "function" and pcall(setclipboard, bd.Link)
+					eb.Text = ok and "Copied!" or (bd.Link or "...")
+					if bd.Callback then
+						pcall(bd.Callback)
+					end
+					task.delay(1.2, function()
+						if eb.Parent then
+							eb.Text = was
+						end
+					end)
+				end)
+			end
+			y = y + 30 + GAP
 		end
-		y = y + 34
-	end
-	if o.Tagline then
-		local tg = label(card, tostring(o.Tagline), 9, C.Dim, false)
-		tg.Position = UDim2.fromOffset(PAD, y)
-		tg.Size = UDim2.new(1, -PAD * 2, 0, 14)
+		if o.Tagline then
+			local tg = label(p, tostring(o.Tagline), 9, C.Dim, false)
+			tg.Position = UDim2.fromOffset(PAD, y)
+			tg.Size = UDim2.new(1, -PAD * 2, 0, 14)
+			y = y + 16
+		end
+		return y
 	end
 
-	-- ---------- animation loop: shine, ring pulse, border breathe
-	task.spawn(function()
-		task.wait(0.9)
-		while gui.Parent and result == nil do
-			shine.Position = UDim2.fromScale(-0.2, 0.5)
-			tween(shine, 0.8, { Position = UDim2.fromScale(1.2, 0.5) }, Enum.EasingStyle.Quad)
-			tween(cstroke, 0.9, { Transparency = 0.5 }, Enum.EasingStyle.Sine)
-			task.wait(0.9)
-			tween(cstroke, 0.9, { Transparency = 0 }, Enum.EasingStyle.Sine)
-			task.wait(0.9)
-		end
+	-- the close button (top right of the card)
+	local closeB = new("TextButton", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 10), Size = UDim2.fromOffset(28, 28), BackgroundColor3 = Color3.fromRGB(60, 22, 28), Text = "X", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = C.Text, AutoButtonColor = false, ZIndex = 9 }, card)
+	corner(closeB, 14)
+	closeB.MouseEnter:Connect(function()
+		tween(closeB, 0.15, { BackgroundColor3 = Color3.fromRGB(200, 40, 50) })
 	end)
+	closeB.MouseLeave:Connect(function()
+		tween(closeB, 0.15, { BackgroundColor3 = Color3.fromRGB(60, 22, 28) })
+	end)
+
+	local H
+	if wide then
+		local yL = PAD
+		yL = blockHeader(Lf, yL, LW)
+		yL = blockNote(Lf, yL, LW)
+		yL = blockSteps(Lf, yL, LW)
+		yL = blockFooter(Lf, yL, LW)
+		local yR = PAD + 22 -- room for the close button
+		yR = blockProviders(Rf, yR, RW)
+		yR = blockKey(Rf, yR, RW)
+		H = math.max(yL, yR) + PAD - GAP
+	else
+		local y = PAD
+		y = blockHeader(Lf, y, CW)
+		y = blockNote(Lf, y, CW)
+		y = blockSteps(Lf, y, CW)
+		y = blockProviders(Lf, y, CW)
+		y = blockKey(Lf, y, CW)
+		y = blockFooter(Lf, y, CW)
+		H = y + PAD - GAP
+		Rf.Visible = false
+	end
+	card.Size = UDim2.fromOffset(CW, H)
+	local fit = math.min(1, (vp.Y * 0.94) / H, (vp.X * 0.97) / CW)
+	tween(scl, 0.45, { Scale = fit }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	if not o.ReduceMotion then
+		task.spawn(function()
+			task.wait(0.9)
+			while gui.Parent and result == nil do
+				tween(cstroke, 0.9, { Transparency = 0.55 }, Enum.EasingStyle.Sine)
+				task.wait(0.9)
+				tween(cstroke, 0.9, { Transparency = 0 }, Enum.EasingStyle.Sine)
+				task.wait(0.9)
+			end
+		end)
+	end
 	if o.OpenBoom ~= false then
 		task.delay(0.3, function()
 			pcall(RebelUI.Boom, gui, { Color = theme.Glow, Count = 18 })
@@ -7275,7 +7486,7 @@ function RebelUI:KeyGate(o)
 		status.TextColor3 = C.Dim
 		status.Text = "Checking..."
 		pcall(function()
-			lockI.Image = asset(RebelUI.Icons.loading)
+			RebelUI._setIcon(lockI, RebelUI.Icons.loading)
 			spinConn = game:GetService("RunService").RenderStepped:Connect(function(dt)
 				lockI.Rotation = (lockI.Rotation + dt * 360) % 360
 			end)
@@ -7292,7 +7503,7 @@ function RebelUI:KeyGate(o)
 				status.TextColor3 = C.Green
 				status.Text = o.SuccessText or "Correct. Welcome!"
 				pcall(function()
-					lockI.Image = asset(RebelUI.Icons.openpadlock)
+					RebelUI._setIcon(lockI, RebelUI.Icons.openpadlock)
 				end)
 				gl.Text = "UNLOCKED"
 				setStep(3, true)
@@ -7311,7 +7522,7 @@ function RebelUI:KeyGate(o)
 			else
 				tries += 1
 				pcall(function()
-					lockI.Image = asset(RebelUI.Icons.padlock)
+					RebelUI._setIcon(lockI, RebelUI.Icons.padlock)
 				end)
 				setStep(2)
 				status.TextColor3 = C.Bad
@@ -7353,6 +7564,9 @@ function RebelUI:KeyGate(o)
 	end
 	if spinConn then
 		spinConn:Disconnect()
+	end
+	if o.Blur ~= false then
+		RebelUI.Blur(0, 0.4)
 	end
 	tween(scl, 0.2, { Scale = 0.7 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 	tween(back, 0.2, { BackgroundTransparency = 1 })
@@ -10700,8 +10914,20 @@ function Window:CreateNotificationsTab(o)
 	local act, stats
 	local total, errs, warns, did = 0, 0, 0, 0
 	local tab
+	local filter = ""
+	local function passes(...)
+		if filter == "" then
+			return true
+		end
+		for _, s in ipairs({ ... }) do
+			if tostring(s or ""):lower():find(filter, 1, true) then
+				return true
+			end
+		end
+		return false
+	end
 	local function showAction(a)
-		if not act then
+		if not act or not passes(a.Title, a.Detail) then
 			return
 		end
 		act:Add({ Kind = a.Kind or "command", Title = a.Title, Detail = a.Time .. (a.Detail ~= "" and ("  " .. a.Detail) or "") })
@@ -10711,7 +10937,7 @@ function Window:CreateNotificationsTab(o)
 		end
 	end
 	local function show(n)
-		if not act then
+		if not act or not passes(n.Title, n.Text, n.Type) then
 			return
 		end
 		local kind = (n.Type == "success" or n.Type == "warn" or n.Type == "error") and n.Type or "info"
@@ -10751,12 +10977,56 @@ function Window:CreateNotificationsTab(o)
 					showAction(a)
 				end
 			end
+			local function sessionInfo()
+				local ex = "unknown"
+				pcall(function()
+					ex = tostring(identifyexecutor())
+				end)
+				local gname = "this game"
+				pcall(function()
+					gname = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
+				end)
+				local secs = math.floor(os.clock() - (win._born or os.clock()))
+				return table.concat({
+					"Script: " .. tostring(win.TitleText or o.Name or "RebelUI") .. "   (RebelUI v" .. tostring(RebelUI.Version) .. ")",
+					"Game: " .. gname,
+					"Executor: " .. ex,
+					"Device: " .. tostring(RebelUI.Device and RebelUI.Device() or "?") .. "   Setup: " .. tostring(win.Setup),
+					string.format("Open for: %dm %ds", secs // 60, secs % 60),
+					"Actions logged: " .. #(win._actions or {}) .. "   Alerts: " .. #(win._noteLog or {}),
+				}, "\n")
+			end
+			local function exportJson()
+				local HttpService = game:GetService("HttpService")
+				return HttpService:JSONEncode({ actions = win._actions or {}, alerts = win._noteLog or {}, made = os.date("%Y-%m-%d %H:%M:%S") })
+			end
+			t:Input({ Name = "Search the summary", Placeholder = "type a word, then press Enter", NoLog = true, Callback = function(txt)
+				filter = tostring(txt or ""):lower()
+				reload()
+			end })
 			t:IconButtons({
-				{ Icon = RebelUI.Icons.refresh, Name = "Refresh", Callback = reload },
+				{ Icon = RebelUI.Icons.info, Name = "Info", Callback = function()
+					win:Dialog({ Title = "About this session", Text = sessionInfo(), Buttons = { { Name = "Copy", Callback = function()
+						if type(setclipboard) == "function" then
+							pcall(setclipboard, sessionInfo())
+						end
+					end }, { Name = "Close" } } })
+				end },
+				{ Icon = RebelUI.Icons.search, Name = "Search", Callback = function()
+					reload()
+					win:Notify({ Type = "info", Title = filter == "" and "Showing everything" or ("Showing: " .. filter), Text = "Type a word in the box above to filter." })
+				end },
+				{ Icon = RebelUI.Icons.refresh, Name = "Refresh", Async = true, Working = "Refreshing", Done = "Refreshed", Callback = function(done)
+					task.wait(0.2)
+					reload()
+					done()
+				end },
 				{ Icon = RebelUI.Icons.copy, Name = "Copy", Done = "Copied", Callback = function()
 					local ok = type(setclipboard) == "function" and pcall(setclipboard, win:GetSummaryText())
 					win:Notify({ Type = ok and "success" or "warn", Title = ok and "Summary copied" or "Can't copy", Text = ok and "Paste it anywhere." or "Your executor has no clipboard." })
 				end },
+			})
+			t:IconButtons({
 				{ Icon = RebelUI.Icons.printer, Name = "Print", Done = "Printed", Callback = function()
 					print(win:GetSummaryText())
 					local saved = false
@@ -10765,9 +11035,27 @@ function Window:CreateNotificationsTab(o)
 					end
 					win:Notify({ Type = "info", Title = "Printed", Text = saved and "Written to the console and RebelUI_summary.txt" or "Written to the console." })
 				end },
-				{ Icon = RebelUI.Icons.save, Name = "Save", Done = "Saved", Callback = function()
+				{ Icon = RebelUI.Icons.save, Name = "Save", Async = true, Working = "Saving", Done = "Saved", Callback = function(done)
 					local ok = type(writefile) == "function" and pcall(writefile, "RebelUI_summary.txt", win:GetSummaryText())
+					task.wait(0.2)
 					win:Notify({ Type = ok and "success" or "warn", Title = ok and "Saved" or "Can't save", Text = ok and "RebelUI_summary.txt in your workspace folder." or "Your executor can't write files." })
+					done(ok)
+				end },
+				{ Icon = RebelUI.Icons.share, Name = "Share", Done = "Copied", Callback = function()
+					local txt = win:GetSummaryText()
+					if #txt > 1900 then
+						txt = txt:sub(1, 1900) .. "\n..."
+					end
+					local ok = type(setclipboard) == "function" and pcall(setclipboard, "```\n" .. txt .. "\n```")
+					win:Notify({ Type = ok and "success" or "warn", Title = ok and "Ready for Discord" or "Can't copy", Text = ok and "Pasted as a code block it fits one message." or "Your executor has no clipboard." })
+				end },
+				{ Icon = RebelUI.Icons.downloads, Name = "Export", Async = true, Working = "Exporting", Done = "Exported", Callback = function(done)
+					local ok = type(writefile) == "function" and pcall(function()
+						writefile("RebelUI_summary.json", exportJson())
+					end)
+					task.wait(0.2)
+					win:Notify({ Type = ok and "success" or "warn", Title = ok and "Exported" or "Can't export", Text = ok and "RebelUI_summary.json in your workspace folder." or "Your executor can't write files." })
+					done(ok)
 				end },
 			})
 			t:Button({ Name = "Clear the summary", Callback = function()
@@ -11691,24 +11979,26 @@ wrapAction("Cycle", function(n, v)
 	return "Picked in " .. n, tostring(v)
 end)
 
--- Tab:IconButtons({ { Icon = UI.Icons.refresh, Name = "Refresh", Callback = fn }, { Icon = UI.Icons.copy, Name = "Copy" }, ... })
--- A row of square icon buttons with a small name under each. Great for Refresh / Copy / Print.
+-- Tab:IconButtons({ { Icon = UI.Icons.refresh, Name = "Refresh", Async = true, Callback = function(done) ...; done() end }, ... })
+-- A row of icon buttons. An Async button swaps its icon for the loading icon while it works: the icon spins slowly, speeds up for
+-- about 5 seconds, slows down and pauses, then does it again, until the callback calls done(). Min = seconds to keep spinning (default 1.5).
 function Tab:IconButtons(list)
 	local win = self.Win
 	local row = self:_row(52)
 	local n = #list
 	local obj = {}
 	for i, b in ipairs(list) do
-		local btn = new("TextButton", { Position = UDim2.new((i - 1) / n, 4, 0, 4), Size = UDim2.new(1 / n, -8, 1, -8), BackgroundColor3 = Color3.fromRGB(44, 22, 28), Text = "", AutoButtonColor = false, ClipsDescendants = true }, row)
+		local btn = new("TextButton", { Position = UDim2.new((i - 1) / n, 4, 0, 4), Size = UDim2.new(1 / n, -8, 1, -8), BackgroundColor3 = Color3.fromRGB(44, 22, 28), Text = "", AutoButtonColor = false, ClipsDescendants = false }, row)
 		corner(btn, 10)
 		local st = new("UIStroke", { Color = Color3.fromRGB(120, 40, 50), Thickness = 1.2 }, btn)
-		local ic = new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 4), Size = UDim2.fromOffset(18, 18), BackgroundTransparency = 1, Image = asset(b.Icon), ScaleType = Enum.ScaleType.Fit }, btn)
-		corner(ic, 4)
+		local ic = new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 5), Size = UDim2.fromOffset(18, 18), BackgroundTransparency = 1, Image = asset(b.Icon), ScaleType = Enum.ScaleType.Fit, ZIndex = 3 }, btn)
 		RebelUI._iconFix(ic, b.Icon)
 		local nm = label(btn, tostring(b.Name or ""), 9, C.Text, true)
-		nm.Position = UDim2.new(0, 0, 0, 25)
+		nm.Position = UDim2.new(0, 0, 0, 27)
 		nm.Size = UDim2.new(1, 0, 0, 12)
+		nm.ZIndex = 3
 		local sc = new("UIScale", { Scale = 1 }, btn)
+		local busy = false
 		btn.MouseEnter:Connect(function()
 			tween(btn, 0.15, { BackgroundColor3 = Color3.fromRGB(80, 28, 36) })
 			tween(st, 0.15, { Color = win.Theme and win.Theme.Glow or Color3.fromRGB(255, 70, 80) })
@@ -11717,24 +12007,560 @@ function Tab:IconButtons(list)
 			tween(btn, 0.2, { BackgroundColor3 = Color3.fromRGB(44, 22, 28) })
 			tween(st, 0.2, { Color = Color3.fromRGB(120, 40, 50) })
 		end)
-		btn.Activated:Connect(function()
-			tween(sc, 0.07, { Scale = 0.9 })
-			task.delay(0.07, function()
-				tween(sc, 0.3, { Scale = 1 }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-			end)
-			local old = nm.Text
-			nm.Text = b.Done or "Done"
-			task.delay(1, function()
+		local function flash(text)
+			local old = b.Name or ""
+			nm.Text = text
+			task.delay(1.1, function()
 				if nm.Parent then
 					nm.Text = old
 				end
 			end)
-			if b.Callback then
-				task.spawn(b.Callback)
+		end
+		btn.Activated:Connect(function()
+			if busy then
+				return
+			end
+			tween(sc, 0.07, { Scale = 0.9 })
+			task.delay(0.07, function()
+				tween(sc, 0.3, { Scale = 1 }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+			end)
+			if not b.Async then
+				flash(b.Done or "Done")
+				if b.Callback then
+					task.spawn(b.Callback)
+				end
+				return
+			end
+			-- ---- async: loading icon with a slow > fast > slow > stop spin, repeated until done()
+			busy = true
+			local finished, finishedAt = false, nil
+			local started = os.clock()
+			RebelUI._setIcon(ic, RebelUI.Icons.loading)
+			nm.Text = b.Working or "Working..."
+			local PHASES = { { 1.6, 60, 220 }, { 5, 720, 720 }, { 1.6, 220, 40 }, { 0.5, 0, 0 } } -- seconds, deg/s start, deg/s end
+			local ph, pt, rot = 1, 0, 0
+			local conn
+			conn = game:GetService("RunService").RenderStepped:Connect(function(dt)
+				if not btn.Parent then -- the window was closed while it was spinning
+					conn:Disconnect()
+					return
+				end
+				if win.ReduceMotion then
+					return
+				end
+				local P = PHASES[ph]
+				pt += dt
+				local k = math.min(pt / P[1], 1)
+				local speed = P[2] + (P[3] - P[2]) * k
+				if finished then
+					speed = speed * math.max(0, 1 - (os.clock() - finishedAt) / 0.35)
+				end
+				rot = (rot + speed * dt) % 360
+				ic.Rotation = rot
+				if pt >= P[1] then
+					pt = 0
+					ph = ph % #PHASES + 1
+				end
+			end)
+			local function done(ok)
+				if finished then
+					return
+				end
+				finished = true
+				finishedAt = os.clock()
+				task.spawn(function()
+					local minT = b.Min or 1.5
+					local left = minT - (os.clock() - started)
+					if left > 0 then
+						task.wait(left)
+						finishedAt = os.clock()
+					end
+					task.wait(0.4)
+					conn:Disconnect()
+					ic.Rotation = 0
+					RebelUI._setIcon(ic, b.Icon)
+					busy = false
+					flash(ok == false and (b.Failed or "Failed") or (b.Done or "Done"))
+				end)
+			end
+			local okC, err = pcall(function()
+				if b.Callback then
+					task.spawn(function()
+						local ok2, e2 = pcall(b.Callback, done)
+						if not ok2 then
+							warn("[RebelUI] icon button error: " .. tostring(e2))
+							done(false)
+						end
+					end)
+				else
+					done()
+				end
+			end)
+			if not okC then
+				done(false)
 			end
 		end)
 	end
 	return register(self, {}, obj, "IconButtons")
+end
+
+
+-- ============================================================ turn black icons white (so they need no background at all)
+-- RebelUI._png.whiten(pngBytes) -> new png bytes (white, same shape) or nil. Pure Luau: inflate + png unfilter + stored-deflate encode.
+-- Your executor downloads the icon from Roblox, this makes it white, saves it in RebelUI_icons/ and shows that instead.
+-- RebelUI.AutoWhite = false turns it off (the soft glow is used instead).
+RebelUI.AutoWhite = true
+local PNG = {}
+RebelUI._png = PNG
+local band, rshift, lshift, bxor = bit32.band, bit32.rshift, bit32.lshift, bit32.bxor
+
+local LBASE = { 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258 }
+local LEXT = { 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0 }
+local DBASE = { 1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577 }
+local DEXT = { 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13 }
+local CLORD = { 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 }
+
+local function buildHuff(lengths, n)
+	local count, offs, syms = {}, {}, {}
+	for i = 0, 15 do
+		count[i] = 0
+	end
+	for i = 0, n - 1 do
+		count[lengths[i] or 0] += 1
+	end
+	count[0] = 0
+	offs[1] = 0
+	for i = 1, 14 do
+		offs[i + 1] = offs[i] + count[i]
+	end
+	for i = 0, n - 1 do
+		local l = lengths[i] or 0
+		if l ~= 0 then
+			syms[offs[l]] = i
+			offs[l] += 1
+		end
+	end
+	return { count = count, syms = syms }
+end
+
+-- zlib inflate. `data` is a string, returns a table of bytes (or nil)
+function PNG.inflate(data, start)
+	local pos, bitbuf, bitcnt = start or 3, 0, 0 -- skip the 2-byte zlib header
+	local len = #data
+	local function bits(n)
+		while bitcnt < n do
+			if pos > len then
+				error("eof")
+			end
+			bitbuf = bitbuf + lshift(data:byte(pos), bitcnt)
+			pos += 1
+			bitcnt += 8
+		end
+		local v = band(bitbuf, lshift(1, n) - 1)
+		bitbuf = rshift(bitbuf, n)
+		bitcnt -= n
+		return v
+	end
+	local function decode(h)
+		local code, first, index = 0, 0, 0
+		for l = 1, 15 do
+			code = code + bits(1)
+			local c = h.count[l]
+			if code - c < first then
+				return h.syms[index + (code - first)]
+			end
+			index += c
+			first = (first + c) * 2
+			code = code * 2
+		end
+		error("bad code")
+	end
+	local out, n = {}, 0
+	local fixedL, fixedD
+	repeat
+		local final = bits(1)
+		local typ = bits(2)
+		if typ == 0 then
+			bitbuf, bitcnt = 0, 0
+			local l = data:byte(pos) + data:byte(pos + 1) * 256
+			pos += 4
+			for i = 0, l - 1 do
+				n += 1
+				out[n] = data:byte(pos + i)
+			end
+			pos += l
+		else
+			local hl, hd
+			if typ == 1 then
+				if not fixedL then
+					local l = {}
+					for i = 0, 143 do l[i] = 8 end
+					for i = 144, 255 do l[i] = 9 end
+					for i = 256, 279 do l[i] = 7 end
+					for i = 280, 287 do l[i] = 8 end
+					fixedL = buildHuff(l, 288)
+					local d = {}
+					for i = 0, 29 do d[i] = 5 end
+					fixedD = buildHuff(d, 30)
+				end
+				hl, hd = fixedL, fixedD
+			elseif typ == 2 then
+				local nlen, ndist, ncode = bits(5) + 257, bits(5) + 1, bits(4) + 4
+				local cl = {}
+				for i = 0, 18 do cl[i] = 0 end
+				for i = 1, ncode do cl[CLORD[i]] = bits(3) end
+				local ch = buildHuff(cl, 19)
+				local lens, idx = {}, 0
+				while idx < nlen + ndist do
+					local sym = decode(ch)
+					if sym < 16 then
+						lens[idx] = sym
+						idx += 1
+					else
+						local prev, rep = 0, 0
+						if sym == 16 then
+							prev = lens[idx - 1]
+							rep = 3 + bits(2)
+						elseif sym == 17 then
+							rep = 3 + bits(3)
+						else
+							rep = 11 + bits(7)
+						end
+						for _ = 1, rep do
+							lens[idx] = prev
+							idx += 1
+						end
+					end
+				end
+				local ll, dl = {}, {}
+				for i = 0, nlen - 1 do ll[i] = lens[i] end
+				for i = 0, ndist - 1 do dl[i] = lens[nlen + i] end
+				hl, hd = buildHuff(ll, nlen), buildHuff(dl, ndist)
+			else
+				error("bad block")
+			end
+			while true do
+				local sym = decode(hl)
+				if sym < 256 then
+					n += 1
+					out[n] = sym
+				elseif sym == 256 then
+					break
+				else
+					sym -= 257
+					local l = LBASE[sym + 1] + bits(LEXT[sym + 1])
+					local ds = decode(hd)
+					local dist = DBASE[ds + 1] + bits(DEXT[ds + 1])
+					for _ = 1, l do
+						n += 1
+						out[n] = out[n - dist]
+					end
+				end
+				if n % 60000 == 0 then
+					task.wait() -- keep the game running while a big icon is processed
+				end
+			end
+		end
+	until final == 1
+	return out, n
+end
+
+local crcT
+local function crc32(s)
+	if not crcT then
+		crcT = {}
+		for i = 0, 255 do
+			local c = i
+			for _ = 1, 8 do
+				if band(c, 1) == 1 then
+					c = bxor(0xEDB88320, rshift(c, 1))
+				else
+					c = rshift(c, 1)
+				end
+			end
+			crcT[i] = c
+		end
+	end
+	local c = 0xFFFFFFFF
+	for i = 1, #s do
+		c = bxor(crcT[band(bxor(c, s:byte(i)), 255)], rshift(c, 8))
+	end
+	return bxor(c, 0xFFFFFFFF)
+end
+local function be32(n)
+	return string.char(band(rshift(n, 24), 255), band(rshift(n, 16), 255), band(rshift(n, 8), 255), band(n, 255))
+end
+local function chunk(name, body)
+	return be32(#body) .. name .. body .. be32(crc32(name .. body))
+end
+
+-- decode a png into { w, h, rgba = function(x, y) } -> returns w, h, getpixel table of alpha/luma info
+function PNG.decode(bytes)
+	if bytes:sub(1, 8) ~= "\137PNG\r\n\26\n" then
+		return nil, "not a png"
+	end
+	local pos, w, h, depth, ctype, interlace = 9, 0, 0, 0, 0, 0
+	local idat, plte, trns = {}, nil, nil
+	while pos <= #bytes do
+		local l = (bytes:byte(pos) * 16777216) + bytes:byte(pos + 1) * 65536 + bytes:byte(pos + 2) * 256 + bytes:byte(pos + 3)
+		local name = bytes:sub(pos + 4, pos + 7)
+		local body = bytes:sub(pos + 8, pos + 7 + l)
+		if name == "IHDR" then
+			w = body:byte(1) * 16777216 + body:byte(2) * 65536 + body:byte(3) * 256 + body:byte(4)
+			h = body:byte(5) * 16777216 + body:byte(6) * 65536 + body:byte(7) * 256 + body:byte(8)
+			depth, ctype, interlace = body:byte(9), body:byte(10), body:byte(13)
+		elseif name == "PLTE" then
+			plte = body
+		elseif name == "tRNS" then
+			trns = body
+		elseif name == "IDAT" then
+			idat[#idat + 1] = body
+		elseif name == "IEND" then
+			break
+		end
+		pos += 12 + l
+	end
+	if interlace ~= 0 or depth ~= 8 or w < 1 or h < 1 or w * h > 4200000 then
+		return nil, "unsupported png"
+	end
+	local chans = ({ [0] = 1, [2] = 3, [3] = 1, [4] = 2, [6] = 4 })[ctype]
+	if not chans then
+		return nil, "unsupported color type"
+	end
+	local raw, n = PNG.inflate(table.concat(idat))
+	local stride = w * chans
+	if n < (stride + 1) * h then
+		return nil, "short data"
+	end
+	-- unfilter in place
+	local prev, cur = {}, {}
+	for i = 1, stride do
+		prev[i] = 0
+	end
+	local px = {} -- px[y] = row table
+	local p = 1
+	for y = 1, h do
+		local f = raw[p]
+		p += 1
+		cur = {}
+		for i = 1, stride do
+			local x = raw[p + i - 1]
+			local a = i > chans and cur[i - chans] or 0
+			local b = prev[i]
+			local c = i > chans and prev[i - chans] or 0
+			local v
+			if f == 0 then
+				v = x
+			elseif f == 1 then
+				v = x + a
+			elseif f == 2 then
+				v = x + b
+			elseif f == 3 then
+				v = x + math.floor((a + b) / 2)
+			else
+				local pa, pb, pc = math.abs(b - c), math.abs(a - c), math.abs(a + b - 2 * c)
+				local pr = (pa <= pb and pa <= pc) and a or (pb <= pc and b or c)
+				v = x + pr
+			end
+			cur[i] = v % 256
+		end
+		p += stride
+		px[y] = cur
+		prev = cur
+		if y % 16 == 0 then
+			task.wait()
+		end
+	end
+	return { w = w, h = h, ctype = ctype, rows = px, plte = plte, trns = trns }
+end
+
+-- returns white png bytes: same alpha, white color. If the picture has no alpha, dark pixels become the white shape.
+function PNG.whiten(bytes)
+	local img, why = PNG.decode(bytes)
+	if not img then
+		return nil, why
+	end
+	local w, h, ct = img.w, img.h, img.ctype
+	-- build an alpha value per pixel
+	local alphaRows, darkSum, darkN, darkPix = {}, 0, 0, 0
+	local hasAlpha = ct == 4 or ct == 6 or (ct == 3 and img.trns ~= nil)
+	for y = 1, h do
+		local r = img.rows[y]
+		local a = {}
+		for x = 1, w do
+			local av, lum
+			if ct == 6 then
+				av, lum = r[x * 4], (r[x * 4 - 3] * 3 + r[x * 4 - 2] * 6 + r[x * 4 - 1]) / 10
+			elseif ct == 4 then
+				av, lum = r[x * 2], r[x * 2 - 1]
+			elseif ct == 2 then
+				av, lum = 255, (r[x * 3 - 2] * 3 + r[x * 3 - 1] * 6 + r[x * 3]) / 10
+			elseif ct == 0 then
+				av, lum = 255, r[x]
+			else
+				local idx = r[x]
+				local pl = img.plte
+				av = img.trns and (img.trns:byte(idx + 1) or 255) or 255
+				lum = pl and ((pl:byte(idx * 3 + 1) * 3 + pl:byte(idx * 3 + 2) * 6 + pl:byte(idx * 3 + 3)) / 10) or 0
+			end
+			if av > 20 then
+				darkSum += lum
+				darkN += 1
+			end
+			if lum < 100 then
+				darkPix += 1
+			end
+			a[x] = { av, lum }
+		end
+		alphaRows[y] = a
+	end
+	if darkN == 0 or (hasAlpha and darkSum / darkN > 110) or (not hasAlpha and darkPix < w * h * 0.02) then
+		return nil, "icon is not dark" -- already light: leave it alone
+	end
+	local pxs = {}
+	for a = 0, 255 do
+		pxs[a] = "\255\255\255" .. string.char(a)
+	end
+	local rows = {}
+	for y = 1, h do
+		local parts = { "\0" }
+		for x = 1, w do
+			local av, lum = alphaRows[y][x][1], alphaRows[y][x][2]
+			local a
+			if hasAlpha then
+				a = av
+			else
+				a = math.clamp(math.floor(255 - lum + 0.5), 0, 255) -- dark = shape
+			end
+			parts[#parts + 1] = pxs[a]
+		end
+		rows[y] = table.concat(parts)
+		if y % 32 == 0 then
+			task.wait()
+		end
+	end
+	local rawStr = table.concat(rows)
+	-- zlib with stored blocks
+	local z = { "\120\1" }
+	local i, total = 1, #rawStr
+	local s1, s2 = 1, 0
+	for k = 1, total do
+		s1 = (s1 + rawStr:byte(k)) % 65521
+		s2 = (s2 + s1) % 65521
+		if k % 200000 == 0 then
+			task.wait()
+		end
+	end
+	while i <= total do
+		local blk = rawStr:sub(i, i + 65534)
+		local fin = (i + #blk > total) and 1 or 0
+		z[#z + 1] = string.char(fin, band(#blk, 255), rshift(#blk, 8), band(bxor(#blk, 65535), 255), rshift(bxor(#blk, 65535), 8))
+		z[#z + 1] = blk
+		i += #blk
+	end
+	z[#z + 1] = be32(s2 * 65536 + s1)
+	local ihdr = be32(w) .. be32(h) .. "\8\6\0\0\0"
+	return "\137PNG\r\n\26\n" .. chunk("IHDR", ihdr) .. chunk("IDAT", table.concat(z)) .. chunk("IEND", "")
+end
+
+-- ---- download + cache + swap
+local whiteCache, queue, working = {}, {}, false
+local watchers = {} -- id -> list of { img, halos }
+RebelUI._iconWatch = watchers
+local function canWhite()
+	return RebelUI.AutoWhite and type(writefile) == "function" and type(getcustomasset) == "function" and type(isfile) == "function"
+end
+local function fetchPng(id)
+	for _ = 1, 3 do
+		local okG, body = pcall(function()
+			return game:HttpGet("https://assetdelivery.roblox.com/v1/asset/?id=" .. tostring(id))
+		end)
+		if not okG or type(body) ~= "string" or #body < 50 then
+			return nil
+		end
+		if body:sub(2, 4) == "PNG" then
+			return body
+		end
+		local nid = body:match("[?&]id=(%d+)") or body:match("rbxassetid://(%d+)")
+		if not nid or nid == tostring(id) then
+			return nil
+		end
+		id = nid
+	end
+	return nil
+end
+local function applyWhite(id, path)
+	local okA, a = pcall(getcustomasset, path)
+	if not okA or not a then
+		return false
+	end
+	whiteCache[id] = a
+	for _, w in ipairs(watchers[id] or {}) do
+		pcall(function()
+			if w.img and w.img.Parent and RebelUI._curId[w.img] == id then
+				w.img.Image = a
+				for _, f in ipairs(w.halos or {}) do
+					f:Destroy()
+				end
+			end
+		end)
+	end
+	watchers[id] = nil
+	return true
+end
+local function pump()
+	if working then
+		return
+	end
+	working = true
+	task.spawn(function()
+		while #queue > 0 do
+			local id = table.remove(queue, 1)
+			pcall(function()
+				local path = "RebelUI_icons/" .. id .. "_w.png"
+				if isfile(path) then
+					applyWhite(id, path)
+					return
+				end
+				local bytes = fetchPng(id)
+				if not bytes then
+					return
+				end
+				local out = PNG.whiten(bytes)
+				if not out then
+					return
+				end
+				pcall(function()
+					if makefolder and not isfolder("RebelUI_icons") then
+						makefolder("RebelUI_icons")
+					end
+				end)
+				writefile(path, out)
+				applyWhite(id, path)
+			end)
+			task.wait(0.05)
+		end
+		working = false
+	end)
+end
+-- called by _iconFix: shows the white version as soon as it exists
+function RebelUI._whitenIcon(img, id, halos)
+	if not canWhite() then
+		return false
+	end
+	id = tostring(id)
+	if whiteCache[id] then
+		img.Image = whiteCache[id]
+		return true
+	end
+	watchers[id] = watchers[id] or {}
+	table.insert(watchers[id], { img = img, halos = halos })
+	if not watchers[id].queued then
+		watchers[id].queued = true
+		queue[#queue + 1] = id
+		pump()
+	end
+	return false
 end
 
 return RebelUI
