@@ -161,6 +161,28 @@ local function tween(o, t, props, style, dir)
 	return tw
 end
 
+-- Developer tools. UI.Debug = true prints what the library is doing. UI.OnError = function(where, err) ... end receives every error
+-- that RebelUI catches (a broken callback never breaks the rest of the UI). UI.Errors holds the last 50.
+RebelUI.Debug = false
+RebelUI.OnError = nil
+RebelUI.Errors = {}
+function RebelUI.Log(...)
+	if RebelUI.Debug then
+		print("[RebelUI]", ...)
+	end
+end
+function RebelUI._reportError(where, err)
+	local list = RebelUI.Errors
+	list[#list + 1] = { Where = where, Error = tostring(err), Time = os.time() }
+	if #list > 50 then
+		table.remove(list, 1)
+	end
+	RebelUI.Log("error in", where, tostring(err))
+	if type(RebelUI.OnError) == "function" then
+		pcall(RebelUI.OnError, where, tostring(err))
+	end
+end
+
 local function safe(fn, ...)
 	if type(fn) ~= "function" then
 		return
@@ -168,6 +190,7 @@ local function safe(fn, ...)
 	local ok, err = pcall(fn, ...)
 	if not ok then
 		warn("[RebelUI] callback error: " .. tostring(err))
+		RebelUI._reportError("callback", err)
 	end
 end
 
@@ -372,8 +395,9 @@ function RebelUI._fancyGui(gui)
 	gui.DescendantAdded:Connect(hook)
 end
 
+local origText = setmetatable({}, { __mode = "k" })
 local function label(parent, str, size, color, bold)
-	return new("TextLabel", {
+	local l = new("TextLabel", {
 		BackgroundTransparency = 1,
 		Text = RebelUI.Lang[str] or str,
 		TextSize = size or 11,
@@ -382,12 +406,36 @@ local function label(parent, str, size, color, bold)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	}, parent)
+	if type(str) == "string" then
+		origText[l] = str
+	end
+	return l
 end
 
 -- ============================================================ small tools you can use too
--- Translate the panel: RebelUI:SetLanguage({ ["Settings"] = "Tetapan", ["Save settings"] = "Simpan" }) before CreateWindow.
+-- Translate the panel. Give a table, or the name of a language you added:
+--   UI:AddLanguage("Malay", { ["Settings"] = "Tetapan", ["Save settings"] = "Simpan" })
+--   UI:SetLanguage("Malay")      -- text already on screen changes right away. UI:SetLanguage() goes back to English.
+RebelUI.Languages = {}
+function RebelUI:AddLanguage(name, dict)
+	RebelUI.Languages[tostring(name)] = type(dict) == "table" and dict or {}
+end
 function RebelUI:SetLanguage(dict)
+	if type(dict) == "string" then
+		dict = RebelUI.Languages[dict] or {}
+	end
 	RebelUI.Lang = type(dict) == "table" and dict or {}
+	for l, orig in pairs(origText) do
+		pcall(function()
+			if l.Parent then
+				l.Text = RebelUI.Lang[orig] or orig
+			end
+		end)
+	end
+end
+-- UI.T("Settings") -> the translated text (use it for your own labels)
+function RebelUI.T(str)
+	return RebelUI.Lang[str] or str
 end
 
 -- A spring: smooth, bouncy movement. local s = UI.Spring.new(0, 12, 0.6); s.Target = 1; s:Update(dt) each frame.
@@ -2969,6 +3017,49 @@ local function register(self, o, obj, kind)
 		end
 	end
 	obj.Row = row
+	-- move an element after it was made: obj:MoveUp() / obj:MoveDown() / obj:MoveTo(position)
+	local page = self.Page
+	local function siblings()
+		local list = {}
+		for _, c in ipairs(page:GetChildren()) do
+			if c:IsA("GuiObject") then
+				list[#list + 1] = c
+			end
+		end
+		table.sort(list, function(a, b)
+			return a.LayoutOrder < b.LayoutOrder
+		end)
+		return list
+	end
+	function obj:MoveTo(pos)
+		if not row or not row.Parent then
+			return false
+		end
+		local list = siblings()
+		local orders = {}
+		for i, c in ipairs(list) do
+			orders[i] = c.LayoutOrder
+		end
+		local at = table.find(list, row)
+		if not at then
+			return false
+		end
+		table.remove(list, at)
+		pos = math.clamp(math.floor(tonumber(pos) or at), 1, #list + 1)
+		table.insert(list, pos, row)
+		for i, c in ipairs(list) do
+			c.LayoutOrder = orders[i]
+		end
+		return true
+	end
+	function obj:MoveUp()
+		local list = siblings()
+		return obj:MoveTo((table.find(list, row) or 1) - 1)
+	end
+	function obj:MoveDown()
+		local list = siblings()
+		return obj:MoveTo((table.find(list, row) or 1) + 1)
+	end
 	if kind then
 		self._items = self._items or {}
 		table.insert(self._items, { kind = kind, o = o, obj = obj })
@@ -7233,10 +7324,50 @@ function RebelUI.Blur(size, t)
 	end)
 end
 
+-- RebelUI.KeyTimeLeft() -> seconds left on the key that was just accepted (nil = no limit / no key).
+function RebelUI.KeyTimeLeft()
+	if not RebelUI.KeyExpires then
+		return nil
+	end
+	return math.max(0, RebelUI.KeyExpires - os.time())
+end
+-- RebelUI.WatchKey(function() ... end) -> calls your function once when the key runs out (do your cleanup / show the panel again there).
+-- Returns a function that stops the watch.
+function RebelUI.WatchKey(onExpire)
+	local alive = true
+	task.spawn(function()
+		while alive do
+			local left = RebelUI.KeyTimeLeft()
+			if left == nil then
+				return
+			end
+			if left <= 0 then
+				pcall(onExpire)
+				return
+			end
+			task.wait(math.min(left, 5))
+		end
+	end)
+	return function()
+		alive = false
+	end
+end
+
+-- UI.GetHWID() -> an id for this player's device (nil if the executor hides it). Used by KeyGate({ HwidBind = true }).
+function RebelUI.GetHWID()
+	local ok, id = pcall(function()
+		return game:GetService("RbxAnalyticsService"):GetClientId()
+	end)
+	if ok and type(id) == "string" and id ~= "" then
+		return id
+	end
+	return nil
+end
+
 function RebelUI:KeyGate(o)
 	-- A WIDE card made for phones held sideways: left = logo, name, note, steps, extra buttons. right = get-key buttons, key box, Verify.
 	-- (In portrait it becomes one tall column.) Options: Name, Title, Subtitle, Logo, Emoji, Note, NoteIcon, NoteColor, Providers, Buttons, Tagline,
-	-- Keys, Check(key), Save, File, Boom, BoomText, Theme, Setup, Video, Background, BackgroundOpacity, Blur (default true), MaxTries, Timeout, ReduceMotion
+	-- HwidBind (a saved key only works on the device that made it; Check(key, hwid) also gets the device id), Keys, Check(key) (may also return a 2nd value: seconds the key lasts), RememberFor (seconds a saved key stays valid), Save, File, Boom, BoomText, Theme, Setup, Video, Background, BackgroundOpacity, Blur (default true), MaxTries, Timeout, ReduceMotion
 	o = o or {}
 	if RebelUI._off then
 		return false
@@ -7251,13 +7382,17 @@ function RebelUI:KeyGate(o)
 		return s
 	end
 	local function valid(k)
+		-- returns ok, seconds the key lasts (nil = no limit). Check(key) may return true, seconds.
 		k = trim(k)
 		if k == "" then
 			return false
 		end
 		if type(o.Check) == "function" then
-			local ok, r = pcall(o.Check, k)
-			return ok and r == true
+			local ok, r, ttl = pcall(o.Check, k, RebelUI.GetHWID())
+			if ok and r == true then
+				return true, tonumber(ttl)
+			end
+			return false
 		end
 		for _, good in ipairs(o.Keys or {}) do
 			if k == tostring(good) then
@@ -7266,14 +7401,52 @@ function RebelUI:KeyGate(o)
 		end
 		return false
 	end
+	local function fmtTime(sec)
+		sec = math.max(0, math.floor(sec))
+		if sec >= 86400 then
+			return string.format("%dd %dh", sec // 86400, (sec % 86400) // 3600)
+		elseif sec >= 3600 then
+			return string.format("%dh %dm", sec // 3600, (sec % 3600) // 60)
+		elseif sec >= 60 then
+			return string.format("%dm %ds", sec // 60, sec % 60)
+		end
+		return sec .. "s"
+	end
+	RebelUI.FormatTime = fmtTime
 	if o.Save ~= false and type(readfile) == "function" and type(isfile) == "function" then
-		local okf, saved = pcall(function()
+		local okf, raw = pcall(function()
 			if isfile(file) then
 				return readfile(file)
 			end
 		end)
-		if okf and saved and valid(saved) then
-			return true, trim(saved)
+		if okf and raw then
+			local k, exp, hw = tostring(raw):match("^([^\n]*)\n(%d*)\n?([^\n]*)")
+			if not k then
+				k, exp = tostring(raw), nil
+			end
+			exp = tonumber(exp)
+			local fresh = true
+			if o.HwidBind then
+				local mine = RebelUI.GetHWID()
+				if not mine or hw ~= mine then
+					fresh = false -- saved on another device (or no id available): ask again
+				end
+			end
+			if exp then
+				fresh = fresh and os.time() < exp
+			elseif o.RememberFor then
+				fresh = false -- an old save with no time stamp, and you now want keys to expire
+			end
+			if fresh then
+				local good, ttl = valid(k)
+				if good then
+					if ttl then
+						exp = math.min(exp or math.huge, os.time() + ttl)
+					end
+					RebelUI.KeyExpires = exp
+					return true, trim(k), exp
+				end
+			end
 		end
 	end
 	local NOTE = {
@@ -7349,6 +7522,18 @@ function RebelUI:KeyGate(o)
 	local card = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(CW, 400), BackgroundColor3 = Color3.fromRGB(20, 11, 14), BorderSizePixel = 0, Active = true, ClipsDescendants = true, ZIndex = 5 }, back)
 	corner(card, 18)
 	local cstroke = new("UIStroke", { Color = theme.Glow, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, card)
+	-- a bright streak that slowly travels around the panel rim
+	if not o.ReduceMotion and o.Rim ~= false then
+		local rim = new("UIGradient", { Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, theme.Glow), ColorSequenceKeypoint.new(0.35, Color3.fromRGB(70, 20, 28)), ColorSequenceKeypoint.new(0.5, Color3.new(1, 1, 1)), ColorSequenceKeypoint.new(0.65, Color3.fromRGB(70, 20, 28)), ColorSequenceKeypoint.new(1, theme.Glow) }) }, cstroke)
+		task.spawn(function()
+			local r = 0
+			while card.Parent do
+				r = (r + 3) % 360
+				rim.Rotation = r
+				task.wait(0.03)
+			end
+		end)
+	end
 	new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(36, 15, 19), Color3.fromRGB(15, 7, 9)) }, card)
 	local scl = new("UIScale", { Scale = 0.8 }, card)
 	local Lf = new("Frame", { Size = UDim2.new(0, LW, 1, 0), BackgroundTransparency = 1 }, card)
@@ -7412,7 +7597,7 @@ function RebelUI:KeyGate(o)
 			return y
 		end
 		local text = (o.NoteIcon and (o.NoteIcon .. "  ") or "") .. "Note: " .. tostring(o.Note)
-		local perLine = math.max(10, math.floor((W - PAD * 2 - 30) / 6))
+		local perLine = math.max(10, math.floor((W - PAD * 2 - 30) / 7.4))
 		local lines = math.ceil(#text / perLine) + select(2, text:gsub("\n", ""))
 		local h = 14 + lines * 13
 		local nc = pick(o.NoteColor, Color3.fromRGB(255, 190, 50))
@@ -7481,6 +7666,7 @@ function RebelUI:KeyGate(o)
 			local im
 			if img then
 				im = new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -14, 1, -12), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit, ImageTransparency = 1, ZIndex = 3 }, b)
+				corner(im, 10)
 				RebelUI.SetImage(im, img, function(okI)
 					if okI and im.Parent then
 						tween(im, 0.3, { ImageTransparency = 0 })
@@ -7489,7 +7675,7 @@ function RebelUI:KeyGate(o)
 				end)
 			end
 			-- "copied" feedback: a small pill pops in at the corner, the border turns green, the logo stays visible
-			local pill = new("Frame", { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -6, 1, 14), Size = UDim2.fromOffset(86, 20), BackgroundColor3 = Color3.fromRGB(30, 160, 80), BorderSizePixel = 0, ZIndex = 8 }, b)
+			local pill = new("Frame", { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -6, 1, 40), Size = UDim2.fromOffset(86, 20), BackgroundColor3 = Color3.fromRGB(30, 160, 80), BorderSizePixel = 0, Visible = false, ZIndex = 8 }, b)
 			corner(pill, 10)
 			local ct = label(pill, "Link copied", 9, C.White, true)
 			ct.Size = UDim2.fromScale(1, 1)
@@ -7522,6 +7708,8 @@ function RebelUI:KeyGate(o)
 				pill.BackgroundColor3 = ok and Color3.fromRGB(30, 160, 80) or Color3.fromRGB(180, 50, 50)
 				local good = ok and Color3.fromRGB(60, 220, 120) or Color3.fromRGB(235, 70, 70)
 				tween(bs, 0.15, { Color = good, Transparency = 0, Thickness = 2.5 })
+				pill.Position = UDim2.new(1, -6, 1, 40)
+				pill.Visible = true
 				tween(pill, 0.3, { Position = UDim2.new(1, -6, 1, -6) }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 				if im then
 					tween(im, 0.15, { ImageTransparency = 0.25 })
@@ -7533,7 +7721,12 @@ function RebelUI:KeyGate(o)
 					if me ~= token or not b.Parent then
 						return
 					end
-					tween(pill, 0.25, { Position = UDim2.new(1, -6, 1, 14) })
+					tween(pill, 0.25, { Position = UDim2.new(1, -6, 1, 40) })
+					task.delay(0.3, function()
+						if me == token and pill.Parent then
+							pill.Visible = false
+						end
+					end)
 					tween(bs, 0.3, { Color = col, Transparency = 0.45, Thickness = 1.5 })
 					if im then
 						tween(im, 0.3, { ImageTransparency = 0 })
@@ -7580,6 +7773,12 @@ function RebelUI:KeyGate(o)
 		gl.TextXAlignment = Enum.TextXAlignment.Center
 		gl.TextTruncate = Enum.TextTruncate.AtEnd
 		gl.ZIndex = 4
+		if not o.ReduceMotion then
+			local breathe = new("UIScale", { Scale = 1 }, go)
+			pcall(function()
+				TweenService:Create(breathe, TweenInfo.new(1.1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { Scale = 1.025 }):Play()
+			end)
+		end
 		local shine = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(-0.3, 0.5), Size = UDim2.new(0, 30, 1.6, 0), Rotation = 20, BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.78, BorderSizePixel = 0, ZIndex = 4 }, go)
 		task.spawn(function()
 			task.wait(0.9)
@@ -7727,7 +7926,7 @@ function RebelUI:KeyGate(o)
 		end)
 		task.spawn(function()
 			local k = trim(box.Text)
-			local good = valid(k)
+			local good, ttl = valid(k)
 			if spinConn then
 				spinConn:Disconnect()
 				spinConn = nil
@@ -7735,7 +7934,9 @@ function RebelUI:KeyGate(o)
 			lockI.Rotation = 0
 			if good then
 				status.TextColor3 = C.Green
-				status.Text = o.SuccessText or "Correct. Welcome!"
+				ttl = ttl or o.RememberFor
+				RebelUI.KeyExpires = ttl and (os.time() + ttl) or nil
+				status.Text = (o.SuccessText or "Correct. Welcome!") .. (ttl and ("  Key valid for " .. fmtTime(ttl)) or "")
 				pcall(function()
 					RebelUI._setIcon(lockI, RebelUI.Icons.openpadlock)
 				end)
@@ -7743,7 +7944,7 @@ function RebelUI:KeyGate(o)
 				setStep(3, true)
 				tween(cstroke, 0.2, { Color = C.Green })
 				if remember and type(writefile) == "function" then
-					pcall(writefile, file, k)
+					pcall(writefile, file, k .. "\n" .. (RebelUI.KeyExpires or "") .. (o.HwidBind and ("\n" .. (RebelUI.GetHWID() or "")) or ""))
 				end
 				savedKey = k
 				if o.Boom ~= false then
@@ -7807,7 +8008,7 @@ function RebelUI:KeyGate(o)
 	task.wait(0.2)
 	gui:Destroy()
 	if result then
-		return true, savedKey
+		return true, savedKey, RebelUI.KeyExpires
 	end
 	return false
 end
