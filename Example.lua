@@ -110,12 +110,13 @@ local function keyGateOptions(save)
 		NoteColor = "Gold", -- Green, Blue, Red, Gold, Purple, Pink, Orange, Cyan, Gray or a Color3
 		Tagline = "Rebelwar  |  by prorizz196",
 		Setup = SETUP, -- Auto / Mobile / PC: the key panel sizes itself for the device
-		-- get-key buttons, two per row. Put your own link in each one (tap = the link is copied).
+		-- get-key buttons (two to start with, more are allowed). Put your own link in each one (tap = the link is copied).
 		Providers = {
 			{ "Linkvertise", "https://linkvertise.com/your-link-here" },
 			{ "LootLabs", GET_KEY_LINK },
-			{ "Platoboost", "https://auth.platoboost.com/your-link-here" },
-			{ "Rekonise", "https://rekonise.com/your-link-here" },
+			-- two buttons to start with. Add more any time, for example:
+			-- { "Platoboost", "https://auth.platoboost.com/your-link-here" },
+			-- { "Rekonise", "https://rekonise.com/your-link-here" },
 		},
 		ProvidersText = "GET YOUR KEY  (tap a button: the link is copied)",
 		Buttons = {
@@ -123,6 +124,7 @@ local function keyGateOptions(save)
 			{ Name = "Help", Color = "Blue", Link = "https://discord.gg/8s7RR3wZ6b" },
 		},
 		Keys = KEYS,
+		RememberFor = 24 * 60 * 60, -- a remembered key lasts 24 hours, then the panel comes back (nil = never expires)
 		Save = save, -- true remembers the key on this device
 		Boom = true, -- explosion effect when the key is right
 		BoomText = "LET'S GO!",
@@ -225,8 +227,8 @@ Win = UI:CreateWindow({
 	Open = false, -- stay closed until the loading screen is done
 	Opacity = 100, -- 100 = solid panel (10 to 100). Players can change it in Settings
 	Setup = SETUP, -- Auto / Mobile / PC. PC gets a wider panel, Mobile a big thumb-sized open button and swipe between tabs
-	ToggleStyle = "Sharp", -- Switch, Sharp, Check, Radio, Heart, Star, Checkbox
-	SliderStyle = "Sharp",
+	ToggleStyle = "Switch", -- Switch (normal), Sharp, Check, Radio, Heart, Star, Checkbox
+	SliderStyle = "Normal", -- "Sharp" gives diamond knobs and square bars
 	Ambient = true, -- two soft glowing circles drift behind the panel
 	Search = true, -- the search box next to the page title
 	Resizable = true, -- drag the corner grip to resize
