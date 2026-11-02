@@ -2250,7 +2250,7 @@ local tbl = Tab:Table({ Columns = { "Player", "Kills" }, Rows = { { "Ava", 12 },
 
 ## The key panel (`UI:KeyGate`)
 
-A WIDE card made for a phone held sideways (one tall column in portrait; `Layout = "Wide"` or `"Tall"` forces one). Left side: your logo with a pulsing glow (or an emoji), the hub name, a colored note, the 3 steps and the Discord / Help buttons. Right side: the get-key buttons, the key box and Verify. The game behind it is blurred (`Blur = false` turns that off) and glow dots float behind the card. It has a colored note, three steps (1 Get key, 2 Paste, 3 Verify), the get-key buttons two per row, a key box, a Verify button, a "Remember my key" tick, a tries counter, extra buttons (Discord, Help) and a small tagline. Tap a get-key button and its link is copied with a green COPIED flash. Wrong key: the card shakes. Right key: the padlock opens and it booms.
+A WIDE card made for a phone held sideways (one tall column in portrait; `Layout = "Wide"` or `"Tall"` forces one). Left side: your logo with a pulsing glow (or an emoji), the hub name, a colored note, the 3 steps and the Discord / Help buttons. Right side: the get-key buttons, the key box and Verify. The game behind it is blurred (`Blur = false` turns that off) and glow dots float behind the card. It has a colored note, three steps (1 Get key, 2 Paste, 3 Verify), the get-key buttons two per row, a key box, a Verify button, a "Remember my key" tick, a tries counter, extra buttons (Discord, Help) and a small tagline. Each get-key button is a dark card with the logo fitted inside; tap it and the link is copied, the border turns green and a small "Link copied" pill pops in at the corner (the logo stays visible). The key box is light so the black key icon shows. Wrong key: the card shakes. Right key: the padlock opens and it booms.
 
 ```lua
 local ok, key = UI:KeyGate({
@@ -2412,7 +2412,7 @@ Together with the open animations, click ripples, boom, confetti, shake, shimmer
 ## Your icon pack, rich text, Activate cover and toggle styles
 
 **Icons.** `UI.Icons` holds your uploaded Roblox images: `silent save file copy downloads refresh link info printer share notification ringing padlock openpadlock loading calendar key elements expand minimize wrench right up left star`.
-Your black icons are shown alone with a soft glow behind them (Roblox cannot recolor black images, so a glow is the only way to see them on a dark panel). `UI.IconGlow = false` turns the glow off, `UI.IconTile = true` gives a solid colored tile (`UI.IconTileColor`). For perfectly clean icons use the white PNGs in the "white icons" folder.
+Icons are plain black by default. See "Icons: black by default" below for `UI.IconMode` ("Black", "White", "Glow").
 
 ```lua
 Win:CreateTab({ Name = "Tools", Icon = UI.Icons.wrench })
@@ -2504,13 +2504,42 @@ Tab:IconButtons({
 })
 ```
 
+## Stepper and Rating
+
+```lua
+local speed = Tab:Stepper({ Name = "Walk speed", Min = 16, Max = 100, Step = 4, Default = 16, Suffix = "", Flag = "walkspeed", Callback = function(v) end })
+speed:Set(40); print(speed:Get())     -- snaps to the step and stays between Min and Max; hold + or - to repeat
+
+local stars = Tab:Rating({ Name = "Rate this hub", Max = 5, Default = 4, Callback = function(n) end })
+stars:Set(5)                           -- tap the same star again to clear it
+```
+
+Both are saved with your flags and written to the Summary tab.
+
+## Countdown timer
+
+```lua
+local cd = Tab:Countdown({ Name = "Cooldown", Seconds = 30, Loop = false, AutoStart = false, Callback = function() print("done") end })
+cd:Start(); cd:Pause(); cd:Reset(60); print(cd:Get()) -- seconds left
+```
+
+A live timer with a bar and a Start / Pause / Again button.
+
 ## Locked switches and the expand button
 
 A toggle made with `Locked = true` shows a **padlock**; `obj:Lock(false)` swaps it to the **open padlock** (and back). The expand icon in the top bar is connected to the panel: it grows the window to nearly full screen and turns into the minimize icon; tap again to restore. In code: `Win:Maximize(true)` / `Win:Maximize(false)`.
 
-## White icons
+## Icons: black by default
 
-Roblox cannot recolor black images, so RebelUI now **whitens them itself**: it downloads each icon once, turns every pixel white (keeping the shape), saves it in `RebelUI_icons/` and shows that. The result is a clean white icon with nothing behind it. This needs your executor to allow `getcustomasset` and web access to Roblox asset delivery; if it cannot, the icon falls back to the soft white glow (`UI.IconGlow = false` turns the glow off, `UI.IconTile = true` gives a solid tile). `UI.AutoWhite = false` switches whitening off. You can also upload the PNGs from the "white icons" folder and list their ids in the `WHITE` table at the top of `Example.lua`.
+Icons are shown as the **plain black icons with nothing behind them** (no glow, no tile, no recoloring). Pick the look with one line before you create the window:
+
+```lua
+UI.IconMode = "Black" -- default: black icon, nothing behind it
+UI.IconMode = "White" -- RebelUI downloads each icon once, turns it white, saves it in RebelUI_icons/ (needs getcustomasset + web access; otherwise the soft glow is used)
+UI.IconMode = "Glow"  -- black icon with a soft white glow
+```
+
+The "black icons" folder holds clean black PNGs of the main icons. Upload them to Roblox and list their ids in the `WHITE` table at the top of `Example.lua` (or set `UI.Icons.key = 123456`) if you want your own copies. Black icons are hard to see on a dark theme, so use `UI.IconMode = "White"` there.
 
 ## What is not in here (and why)
 
