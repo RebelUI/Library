@@ -317,6 +317,7 @@ local function buildElements(Elements)
 	-- a toggle that can be locked shows a padlock; unlock it and the padlock opens
 	Elements:Stepper({ Name = "Walk speed", Description = "Tap + or - (hold to repeat)", Min = 16, Max = 100, Step = 4, Default = 16, Flag = "walkspeed" })
 Elements:Rating({ Name = "Rate this hub", Default = 4, Flag = "rating", Callback = function(n) Win:Notify({ Title = "Thanks!", Text = "You gave " .. n .. " stars" }) end })
+Elements:Countdown({ Name = "Cooldown demo", Seconds = 10, Callback = function() Win:Notify({ Title = "Timer", Text = "Time is up!" }) end })
 local lockedT = Elements:Toggle({ Name = "Locked feature", Description = "Tap Unlock below", Locked = true })
 	Elements:Button({ Name = "Unlock / lock it", Callback = function()
 		lockedT:Lock(not lockedT.Locked)
