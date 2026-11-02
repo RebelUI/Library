@@ -43,8 +43,8 @@ end
 
 -- normal text everywhere (some phones draw fancy letters as boxes). Optional: UI.FancyText = "Bold" turns on styled letters.
 
--- White icons (from "RebelUI white icons.zip", uploaded to Roblox): paste their asset ids here and they replace the black ones.
--- White icons show with NO tile behind them. Leave a name out (or 0) to keep the old black icon on its red tile.
+-- Your own icon copies (from the "black icons" folder, uploaded to Roblox): paste their asset ids here and they replace the built-in ones.
+-- Leave a name out (or 0) to use the built-in icon (plain black by default; set UI.IconMode = "White" or "Glow" for the other looks).
 local WHITE = {
 	-- key = 0, padlock = 0, openpadlock = 0, notification = 0, wrench = 0, elements = 0, star = 0, right = 0, down = 0,
 	-- copy = 0, refresh = 0, printer = 0, save = 0, link = 0, info = 0, share = 0, calendar = 0, downloads = 0, loading = 0,
@@ -315,7 +315,9 @@ local function buildElements(Elements)
 	Elements:Toggle({ Name = "Name + description", Description = "A second line of small text under the name", Default = true })
 	Elements:Toggle({ Name = "Toggle with the key icon", Icon = UI.Icons.key })
 	-- a toggle that can be locked shows a padlock; unlock it and the padlock opens
-	local lockedT = Elements:Toggle({ Name = "Locked feature", Description = "Tap Unlock below", Locked = true })
+	Elements:Stepper({ Name = "Walk speed", Description = "Tap + or - (hold to repeat)", Min = 16, Max = 100, Step = 4, Default = 16, Flag = "walkspeed" })
+Elements:Rating({ Name = "Rate this hub", Default = 4, Flag = "rating", Callback = function(n) Win:Notify({ Title = "Thanks!", Text = "You gave " .. n .. " stars" }) end })
+local lockedT = Elements:Toggle({ Name = "Locked feature", Description = "Tap Unlock below", Locked = true })
 	Elements:Button({ Name = "Unlock / lock it", Callback = function()
 		lockedT:Lock(not lockedT.Locked)
 	end })
