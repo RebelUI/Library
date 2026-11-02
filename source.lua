@@ -5633,6 +5633,104 @@ function Tab:Rating(o)
 	return register(self, o, obj, "Rating")
 end
 
+function Tab:Countdown(o)
+	-- Name, Seconds, AutoStart, Loop, Flag, Callback(): a live timer with a bar. obj:Start() / Pause() / Reset(seconds) / Get() = seconds left
+	o = o or {}
+	local win = self.Win
+	local total = o.Seconds or 30
+	local row = self:_row(44)
+	local name = label(row, o.Name or "Timer", 11, C.Text, true)
+	name.Position = UDim2.new(0, 10, 0, 4)
+	name.Size = UDim2.new(1, -140, 0, 16)
+	local barBg = new("Frame", { Position = UDim2.new(0, 10, 1, -14), Size = UDim2.new(1, -140, 0, 6), BackgroundColor3 = Color3.fromRGB(40, 24, 28), BorderSizePixel = 0 }, row)
+	corner(barBg, 3)
+	local bar = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = C.White, BorderSizePixel = 0 }, barBg)
+	corner(bar, 3)
+	win:_onTheme(function(t)
+		bar.BackgroundColor3 = t.Accent
+	end)
+	local timeL = new("TextLabel", { BackgroundTransparency = 1, Size = UDim2.fromOffset(60, 20), Position = UDim2.new(1, -128, 0.5, -10), Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = C.Text }, row)
+	local btn = new("TextButton", { Size = UDim2.fromOffset(52, 24), Position = UDim2.new(1, -62, 0.5, -12), BackgroundColor3 = C.White, Text = "Start", TextColor3 = C.White, Font = Enum.Font.GothamBold, TextSize = 10, AutoButtonColor = false }, row)
+	corner(btn, 7)
+	local g = new("UIGradient", { Rotation = 90 }, btn)
+	win:_onTheme(function(t)
+		g.Color = ColorSequence.new(t.Accent, t.Dark:Lerp(t.Accent, 0.35))
+	end)
+	local obj = { Left = total, Running = false }
+	local gen = 0
+	local function render()
+		local m, sec = math.floor(obj.Left / 60), math.ceil(obj.Left % 60)
+		if sec == 60 then
+			m, sec = m + 1, 0
+		end
+		timeL.Text = string.format("%d:%02d", m, sec)
+		bar.Size = UDim2.fromScale(math.clamp(total > 0 and obj.Left / total or 0, 0, 1), 1)
+		btn.Text = obj.Running and "Pause" or (obj.Left <= 0 and "Again" or "Start")
+	end
+	function obj:Start()
+		if obj.Running then
+			return
+		end
+		if obj.Left <= 0 then
+			obj.Left = total
+		end
+		obj.Running = true
+		gen += 1
+		local me = gen
+		render()
+		task.spawn(function()
+			local last = os.clock()
+			while obj.Running and gen == me and row.Parent do
+				task.wait(0.1)
+				if not obj.Running or gen ~= me then
+					break
+				end
+				local now = os.clock()
+				obj.Left = math.max(0, obj.Left - (now - last))
+				last = now
+				render()
+				if obj.Left <= 0 then
+					obj.Running = false
+					render()
+					safe(o.Callback)
+					if o.Loop then
+						obj.Left = total
+						obj:Start()
+					end
+				end
+			end
+		end)
+	end
+	function obj:Pause()
+		obj.Running = false
+		gen += 1
+		render()
+	end
+	function obj:Reset(sec)
+		total = sec or total
+		obj.Running = false
+		gen += 1
+		obj.Left = total
+		render()
+	end
+	function obj:Get()
+		return obj.Left
+	end
+	btn.MouseButton1Click:Connect(function()
+		win:_playClick()
+		if obj.Running then
+			obj:Pause()
+		else
+			obj:Start()
+		end
+	end)
+	render()
+	if o.AutoStart then
+		obj:Start()
+	end
+	return register(self, o, obj, "Countdown")
+end
+
 function Tab:Cycle(o)
 	-- Name, Description, Options, Default (name or number), Flag, Callback(choice, index): the "<  option  >" picker
 	o = o or {}
@@ -7341,6 +7439,7 @@ function RebelUI:KeyGate(o)
 			corner(f, 12)
 			local tx = label(f, names[i], 10, C.Dim, true)
 			tx.Size = UDim2.fromScale(1, 1)
+			tx.TextXAlignment = Enum.TextXAlignment.Center
 			frames[i] = { f, tx }
 		end
 		setStep = function(n, ok)
@@ -7373,26 +7472,29 @@ function RebelUI:KeyGate(o)
 			local col = (type(pr) == "table" and pr.Color) or info.Color or theme.Accent
 			local img = (type(pr) == "table" and pr.Image) or info.Image
 			local r, cI = math.floor((i - 1) / 2), (i - 1) % 2
-			local b = new("TextButton", { Position = UDim2.fromOffset(PAD + cI * (cw + GAP), y + r * 54), Size = UDim2.fromOffset(cw, 48), BackgroundColor3 = col, BackgroundTransparency = 0.7, Text = "", AutoButtonColor = false, ClipsDescendants = true }, p)
-			corner(b, 12)
-			local bs = new("UIStroke", { Color = col, Thickness = 1.5, Transparency = 0.35 }, b)
+			local b = new("TextButton", { Position = UDim2.fromOffset(PAD + cI * (cw + GAP), y + r * 60), Size = UDim2.fromOffset(cw, 54), BackgroundColor3 = Color3.fromRGB(20, 12, 16), Text = "", AutoButtonColor = false, ClipsDescendants = true }, p)
+			corner(b, 14)
+			local bs = new("UIStroke", { Color = col, Thickness = 1.5, Transparency = 0.45 }, b)
 			local fb = label(b, tostring(pname), 13, C.White, true)
 			fb.Size = UDim2.fromScale(1, 1)
+			fb.TextXAlignment = Enum.TextXAlignment.Center
+			local im
 			if img then
-				local im = new("ImageLabel", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit, ImageTransparency = 1, ZIndex = 3 }, b)
-				corner(im, 12)
+				im = new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -14, 1, -12), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit, ImageTransparency = 1, ZIndex = 3 }, b)
 				RebelUI.SetImage(im, img, function(okI)
 					if okI and im.Parent then
-						im.ImageTransparency = 0
+						tween(im, 0.3, { ImageTransparency = 0 })
 						fb.Visible = false
 					end
 				end)
 			end
-			local cover = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(30, 160, 80), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 6 }, b)
-			local ct = label(cover, "COPIED  ✔", 13, C.White, true)
+			-- "copied" feedback: a small pill pops in at the corner, the border turns green, the logo stays visible
+			local pill = new("Frame", { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -6, 1, 14), Size = UDim2.fromOffset(86, 20), BackgroundColor3 = Color3.fromRGB(30, 160, 80), BorderSizePixel = 0, ZIndex = 8 }, b)
+			corner(pill, 10)
+			local ct = label(pill, "Link copied", 9, C.White, true)
 			ct.Size = UDim2.fromScale(1, 1)
-			ct.TextTransparency = 1
-			ct.ZIndex = 7
+			ct.TextXAlignment = Enum.TextXAlignment.Center
+			ct.ZIndex = 9
 			local sc = new("UIScale", { Scale = o.ReduceMotion and 1 or 0 }, b)
 			if not o.ReduceMotion then
 				task.delay(0.25 + i * 0.07, function()
@@ -7400,44 +7502,57 @@ function RebelUI:KeyGate(o)
 				end)
 			end
 			b.MouseEnter:Connect(function()
-				tween(b, 0.15, { BackgroundTransparency = 0.5 })
-				tween(bs, 0.15, { Transparency = 0 })
+				tween(b, 0.15, { BackgroundColor3 = Color3.fromRGB(34, 20, 26) })
+				tween(bs, 0.15, { Transparency = 0, Color = theme.Glow })
 			end)
 			b.MouseLeave:Connect(function()
-				tween(b, 0.2, { BackgroundTransparency = 0.7 })
-				tween(bs, 0.2, { Transparency = 0.35 })
+				tween(b, 0.2, { BackgroundColor3 = Color3.fromRGB(20, 12, 16) })
+				tween(bs, 0.2, { Transparency = 0.45, Color = col })
 			end)
+			local token = 0
 			b.Activated:Connect(function()
 				local ok = link and type(setclipboard) == "function" and pcall(setclipboard, link)
-				tween(sc, 0.08, { Scale = 0.94 })
+				token += 1
+				local me = token
+				tween(sc, 0.08, { Scale = 0.95 })
 				task.delay(0.08, function()
 					tween(sc, 0.3, { Scale = 1 }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 				end)
-				ct.Text = ok and "COPIED  ✔" or "No link set"
-				cover.BackgroundColor3 = ok and Color3.fromRGB(30, 160, 80) or Color3.fromRGB(180, 50, 50)
-				tween(cover, 0.15, { BackgroundTransparency = 0.15 })
-				tween(ct, 0.15, { TextTransparency = 0 })
+				ct.Text = ok and "Link copied" or "No link set"
+				pill.BackgroundColor3 = ok and Color3.fromRGB(30, 160, 80) or Color3.fromRGB(180, 50, 50)
+				local good = ok and Color3.fromRGB(60, 220, 120) or Color3.fromRGB(235, 70, 70)
+				tween(bs, 0.15, { Color = good, Transparency = 0, Thickness = 2.5 })
+				tween(pill, 0.3, { Position = UDim2.new(1, -6, 1, -6) }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+				if im then
+					tween(im, 0.15, { ImageTransparency = 0.25 })
+				end
 				if ok and setStep then
 					setStep(2)
 				end
-				task.delay(1.2, function()
-					tween(cover, 0.3, { BackgroundTransparency = 1 })
-					tween(ct, 0.3, { TextTransparency = 1 })
+				task.delay(1.4, function()
+					if me ~= token or not b.Parent then
+						return
+					end
+					tween(pill, 0.25, { Position = UDim2.new(1, -6, 1, 14) })
+					tween(bs, 0.3, { Color = col, Transparency = 0.45, Thickness = 1.5 })
+					if im then
+						tween(im, 0.3, { ImageTransparency = 0 })
+					end
 				end)
 			end)
 		end
-		return y + math.ceil(#provs / 2) * 54 + GAP - 6
+		return y + math.ceil(#provs / 2) * 60 + GAP - 6
 	end
 
 	-- ================= block: key box, verify, status, remember, tries
 	local function blockKey(p, y, W)
-		local kb = new("Frame", { Position = UDim2.fromOffset(PAD, y), Size = UDim2.new(1, -PAD * 2, 0, 42), BackgroundColor3 = Color3.fromRGB(12, 6, 8), BorderSizePixel = 0 }, p)
+		local kb = new("Frame", { Position = UDim2.fromOffset(PAD, y), Size = UDim2.new(1, -PAD * 2, 0, 42), BackgroundColor3 = Color3.fromRGB(244, 238, 238), BorderSizePixel = 0 }, p) -- light box so the black key icon shows
 		corner(kb, 12)
-		kst = new("UIStroke", { Color = Color3.fromRGB(90, 40, 48), Thickness = 1.5 }, kb)
+		kst = new("UIStroke", { Color = Color3.fromRGB(150, 70, 80), Thickness = 1.5 }, kb)
 		local kico = new("ImageLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), Size = UDim2.fromOffset(20, 20), BackgroundTransparency = 1, Image = asset(RebelUI.Icons.newkey), ScaleType = Enum.ScaleType.Fit }, kb)
 		RebelUI._iconFix(kico, RebelUI.Icons.newkey)
-		box = new("TextBox", { Position = UDim2.fromOffset(42, 0), Size = UDim2.new(1, -80, 1, 0), BackgroundTransparency = 1, Text = "", PlaceholderText = "Paste your key here", PlaceholderColor3 = C.Dim, TextColor3 = C.Text, TextSize = 12, Font = Enum.Font.GothamMedium, ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Left }, kb)
-		local clr = new("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.fromOffset(24, 24), BackgroundColor3 = Color3.fromRGB(50, 26, 30), Text = "X", Font = Enum.Font.GothamBold, TextSize = 10, TextColor3 = C.Dim, AutoButtonColor = false }, kb)
+		box = new("TextBox", { Position = UDim2.fromOffset(42, 0), Size = UDim2.new(1, -80, 1, 0), BackgroundTransparency = 1, Text = "", PlaceholderText = "Paste your key here", PlaceholderColor3 = Color3.fromRGB(125, 100, 106), TextColor3 = Color3.fromRGB(25, 14, 18), TextSize = 12, Font = Enum.Font.GothamMedium, ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Left }, kb)
+		local clr = new("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.fromOffset(24, 24), BackgroundColor3 = Color3.fromRGB(226, 212, 214), Text = "X", Font = Enum.Font.GothamBold, TextSize = 10, TextColor3 = Color3.fromRGB(90, 60, 66), AutoButtonColor = false }, kb)
 		corner(clr, 12)
 		clr.Activated:Connect(function()
 			box.Text = ""
