@@ -201,6 +201,9 @@ end
 -- Black icons cannot be recolored in Roblox, so they get a soft white GLOW behind them (no hard tile).
 -- RebelUI.IconGlow = false turns the glow off. RebelUI.IconTile = true goes back to a solid colored tile (RebelUI.IconTileColor).
 -- White / transparent icons (see the "white icons" folder) need neither: they show alone.
+-- RebelUI.IconMode: "Black" (default) = the plain black icon with NOTHING behind it, no glow, no tile, no recoloring.
+--                   "White" = turn them white (downloaded once, falls back to the glow), "Glow" = black icon with a soft white glow.
+RebelUI.IconMode = "Black"
 RebelUI.IconTile = false
 RebelUI.IconTileColor = Color3.fromRGB(226, 52, 62)
 RebelUI.IconGlow = true
@@ -232,9 +235,13 @@ function RebelUI._iconFix(img, src, tint)
 		end)
 		return
 	end
+	if RebelUI.IconMode == "Black" then
+		img.BackgroundTransparency = 1
+		return -- the plain black icon, nothing behind it
+	end
 	local halos = {}
 	haloOf[img] = halos
-	if RebelUI._whitenIcon and RebelUI._whitenIcon(img, k, halos) then
+	if RebelUI.IconMode ~= "Glow" and RebelUI._whitenIcon and RebelUI._whitenIcon(img, k, halos) then
 		return -- the white version is already saved: no glow needed
 	end
 	if not RebelUI.IconGlow then
@@ -5517,6 +5524,115 @@ function Tab:Choice(o)
 	return register(self, o, obj, "Choice")
 end
 
+function Tab:Stepper(o)
+	-- Name, Description, Min, Max, Step, Default, Flag, Suffix, Callback(value): a number with - and + buttons (hold to repeat)
+	o = o or {}
+	local win = self.Win
+	local mn, mx, step = o.Min or 0, o.Max or 100, o.Step or 1
+	local hasDesc = o.Description ~= nil
+	local row = self:_row(hasDesc and 40 or 34)
+	local name = label(row, o.Name or "Stepper", 11, C.Text, true)
+	name.Position = UDim2.new(0, 10, 0, hasDesc and 6 or 0)
+	name.Size = UDim2.new(1, -160, 0, hasDesc and 14 or 34)
+	if hasDesc then
+		local d = label(row, o.Description, 8, C.Dim, false)
+		d.Position = UDim2.fromOffset(10, 22)
+		d.Size = UDim2.new(1, -160, 0, 11)
+	end
+	local valueL = new("TextLabel", { BackgroundTransparency = 1, Size = UDim2.fromOffset(60, 20), Position = UDim2.new(1, -98, 0.5, -10), Font = Enum.Font.GothamBold, TextSize = 11, TextColor3 = C.Text }, row)
+	local obj = { Value = math.clamp(o.Default or mn, mn, mx) }
+	local function render()
+		valueL.Text = tostring(obj.Value) .. (o.Suffix or "")
+	end
+	function obj:Set(v, silent)
+		v = tonumber(v)
+		if not v then
+			return
+		end
+		v = math.clamp(math.floor((v - mn) / step + 0.5) * step + mn, mn, mx)
+		v = math.floor(v * 1000 + 0.5) / 1000
+		local changed = v ~= obj.Value
+		obj.Value = v
+		render()
+		if changed and not silent then
+			win:_playClick()
+			safe(o.Callback, v)
+		end
+	end
+	function obj:Get()
+		return obj.Value
+	end
+	local function btn(txt, x, dir)
+		local b = new("TextButton", { Size = UDim2.fromOffset(24, 24), Position = UDim2.new(1, x, 0.5, -12), BackgroundColor3 = C.White, Text = "", AutoButtonColor = false }, row)
+		corner(b, 7)
+		local g = new("UIGradient", { Rotation = 90 }, b)
+		new("TextLabel", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Text = txt, TextColor3 = C.White, Font = Enum.Font.GothamBold, TextSize = 14, ZIndex = 2 }, b)
+		win:_onTheme(function(t)
+			g.Color = ColorSequence.new(t.Accent, t.Dark:Lerp(t.Accent, 0.35))
+		end)
+		local held = 0
+		b.MouseButton1Down:Connect(function()
+			held += 1
+			local me = held
+			obj:Set(obj.Value + dir * step)
+			task.delay(0.4, function()
+				while held == me and b.Parent do
+					obj:Set(obj.Value + dir * step)
+					task.wait(0.07)
+				end
+			end)
+		end)
+		local function release()
+			held += 1
+		end
+		b.MouseButton1Up:Connect(release)
+		b.MouseLeave:Connect(release)
+	end
+	btn("-", -126, -1)
+	btn("+", -34, 1)
+	render()
+	return register(self, o, obj, "Stepper")
+end
+
+function Tab:Rating(o)
+	-- Name, Max (default 5), Default, Flag, Callback(stars): tap a star to rate (tap the same star again to clear)
+	o = o or {}
+	local win = self.Win
+	local max = o.Max or 5
+	local row = self:_row(40)
+	local name = label(row, o.Name or "Rating", 11, C.Text, true)
+	name.Position = UDim2.new(0, 10, 0, 0)
+	name.Size = UDim2.new(1, -20 - max * 26, 1, 0)
+	local obj = { Value = math.clamp(o.Default or 0, 0, max) }
+	local stars = {}
+	local function render()
+		for i, s in ipairs(stars) do
+			tween(s, 0.15, { ImageTransparency = i <= obj.Value and 0 or 0.8, Size = i <= obj.Value and UDim2.fromOffset(22, 22) or UDim2.fromOffset(18, 18) })
+		end
+	end
+	function obj:Set(v, silent)
+		obj.Value = math.clamp(math.floor(tonumber(v) or 0), 0, max)
+		render()
+		if not silent then
+			win:_playClick()
+			safe(o.Callback, obj.Value)
+		end
+	end
+	function obj:Get()
+		return obj.Value
+	end
+	for i = 1, max do
+		local s = new("ImageButton", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -(max - i) * 26 - 22, 0.5, 0), Size = UDim2.fromOffset(18, 18), BackgroundTransparency = 1, Image = asset(RebelUI.Icons.star), ScaleType = Enum.ScaleType.Fit, AutoButtonColor = false, ImageTransparency = 0.8 }, row)
+		RebelUI._iconFix(s, RebelUI.Icons.star)
+		stars[i] = s
+		s.MouseButton1Click:Connect(function()
+			obj:Set(obj.Value == i and 0 or i)
+		end)
+	end
+	render()
+	return register(self, o, obj, "Rating")
+end
+
 function Tab:Cycle(o)
 	-- Name, Description, Options, Default (name or number), Flag, Callback(choice, index): the "<  option  >" picker
 	o = o or {}
@@ -6291,7 +6407,7 @@ local function lit(v)
 	return nil
 end
 
-local STATEFUL = { Toggle = true, Slider = true, Dropdown = true, Input = true, Keybind = true, Color = true, Choice = true, Cycle = true }
+local STATEFUL = { Toggle = true, Slider = true, Dropdown = true, Input = true, Keybind = true, Color = true, Choice = true, Cycle = true, Stepper = true, Rating = true }
 
 function Window:GenerateCode()
 	-- writes the Lua that builds this panel as it is now (names, options, current values). Callbacks are left empty.
@@ -11980,6 +12096,12 @@ wrapAction("Choice", function(n, v)
 end)
 wrapAction("Cycle", function(n, v)
 	return "Picked in " .. n, tostring(v)
+end)
+wrapAction("Stepper", function(n, v)
+	return "Set " .. n, tostring(v)
+end, 0.6)
+wrapAction("Rating", function(n, v)
+	return "Rated " .. n, tostring(v)
 end)
 
 -- Tab:IconButtons({ { Icon = UI.Icons.refresh, Name = "Refresh", Async = true, Callback = function(done) ...; done() end }, ... })
