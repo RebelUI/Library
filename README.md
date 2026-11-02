@@ -2525,6 +2525,75 @@ cd:Start(); cd:Pause(); cd:Reset(60); print(cd:Get()) -- seconds left
 
 A live timer with a bar and a Start / Pause / Again button.
 
+## How long a key lasts
+
+```lua
+local ok, key, expiresAt = UI:KeyGate({
+	Name = "MyHub",
+	Keys = { "ABC123" },
+	RememberFor = 60 * 60,                 -- a remembered key is forgotten after 1 hour (seconds). nil = never
+	-- or let YOUR key server decide: Check may return a second value, the seconds this key lasts
+	-- Check = function(key) local good, secs = askMyServer(key); return good, secs end,
+})
+print(UI.KeyTimeLeft())                    -- seconds left, or nil when there is no limit
+local stop = UI.WatchKey(function()        -- runs once when the key runs out
+	-- turn your features off, or call UI:KeyGate again
+end)
+print(UI.FormatTime(5400))                 -- 1h 30m
+```
+
+The accepted message shows "Key valid for 1h 0m". The expiry time is saved next to the remembered key, so closing the game does not reset the clock. This clock lives on the player's own device and a determined player can edit it. For real protection let your key server decide through `Check` (and return `false` once the key has run out).
+
+## For developers
+
+**Shortest working script**
+
+```lua
+local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/rizqadeeb38-dev/Rebelwar_UI/main/source.lua"))()
+local Win = UI:CreateWindow({ Title = "My Hub" })
+local Tab = Win:CreateTab({ Name = "Main" })
+Tab:Toggle({ Name = "Speed", Callback = function(on) print(on) end })
+```
+
+**Debug mode and errors.** A broken callback never breaks the rest of the UI. You can see every error:
+
+```lua
+UI.Debug = true                                   -- prints what the library does ("[RebelUI] ...")
+UI.OnError = function(where, err) warn("UI error in " .. where .. ": " .. err) end
+print(#UI.Errors, UI.Errors[1] and UI.Errors[1].Error) -- the last 50 errors
+UI.Log("my own debug line")                       -- only prints while UI.Debug is true
+```
+
+**Translations (live).**
+
+```lua
+UI:AddLanguage("Malay", { ["Settings"] = "Tetapan", ["Save settings"] = "Simpan" })
+UI:SetLanguage("Malay")   -- text already on screen changes right away
+UI:SetLanguage()          -- back to English
+print(UI.T("Settings"))   -- translate your own text
+```
+
+**Move elements after making them.**
+
+```lua
+local a = Tab:Toggle({ Name = "A" })
+local b = Tab:Toggle({ Name = "B" })
+b:MoveUp()      -- B is now above A
+a:MoveTo(1)     -- A is first again (MoveDown() and MoveTo(position) work the same way)
+```
+
+**Key tied to the device.** `UI:KeyGate({ HwidBind = true, ... })` saves the device id next to the remembered key, so a copied key file does not work on another device. `Check(key, hwid)` also receives the id so your server can bind keys to devices. `UI.GetHWID()` returns the id (or `nil` if the executor hides it). A device id can be faked by a determined player, so treat it as one more hurdle, not as real protection.
+
+**Common problems**
+
+| Problem | Fix |
+|---|---|
+| The panel does not load | `source.lua` in your repo is old. Upload the new one. `Example.lua` shows an "OLD version" message when it sees that. |
+| Icons are hard to see | They are black by default. Use `UI.IconMode = "White"` on dark themes. |
+| Boxes instead of letters | The executor font cannot show fancy letters. Use normal text. |
+| A callback does nothing | Turn on `UI.Debug = true` and set `UI.OnError`. |
+| The key panel comes back every time | The executor has no `writefile`, or `RememberFor` ran out. |
+
 ## Locked switches and the expand button
 
 A toggle made with `Locked = true` shows a **padlock**; `obj:Lock(false)` swaps it to the **open padlock** (and back). The expand icon in the top bar is connected to the panel: it grows the window to nearly full screen and turns into the minimize icon; tap again to restore. In code: `Win:Maximize(true)` / `Win:Maximize(false)`.
