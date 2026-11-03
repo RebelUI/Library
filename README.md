@@ -2250,6 +2250,24 @@ local tbl = Tab:Table({ Columns = { "Player", "Kills" }, Rows = { { "Ava", 12 },
 
 ## The key panel (`UI:KeyGate`)
 
+**The Card panel (default).** A compact card: the title and subtitle (with your logo if you give one), a key box, a status line, a big **Check Key** button, and a row of small buttons: **Get Key** and the ones you list in `Buttons` (Discord, Help...). Tap **Get Key**: with one link it is copied straight away ("Key link copied to clipboard!"); with several, a drawer slides open with one logo button per provider. Tap Discord and "Discord invite copied!" appears.
+
+Animations: the card slides up and each row pops in one after another, a light sweeps over the top bar and the Check Key button, the border breathes, the key box glows when you tap it, the status text slides in, a wrong key shakes the card and flashes the box red, a right key fills the bar green and booms. The Check Key button shows "Checking..." with moving dots. A **Paste** button appears in the key box when your executor has `getclipboard`. Pressing Enter in the box also checks the key.
+
+```lua
+local ok, key = UI:KeyGate({
+	Name = "MyHub", Title = "MY HUB", Subtitle = "Key System  -  enter your key to continue",
+	Keys = { "ABC123" },
+	Providers = { { "Linkvertise", "https://..." }, { "LootLabs", "https://..." } }, -- Get Key opens a drawer
+	Buttons = { { Name = "Discord", Color = "Discord", Link = "https://discord.gg/..." } },
+	Accent = "Discord",   -- color of the bar and Check Key (a color name or Color3; default = the theme color)
+	Cooldown = 3,         -- seconds to wait after a wrong key (default 0)
+	MaxTries = 5, ReduceMotion = false,
+})
+```
+
+`Layout = "Wide"` or `Layout = "Tall"` brings back the older big panels described below.
+
 A WIDE card made for a phone held sideways (one tall column in portrait; `Layout = "Wide"` or `"Tall"` forces one). Left side: your logo with a pulsing glow (or an emoji), the hub name, a colored note, the 3 steps and the Discord / Help buttons. Right side: the get-key buttons, the key box and Verify. The game behind it is blurred (`Blur = false` turns that off) and glow dots float behind the card. It has a colored note, three steps (1 Get key, 2 Paste, 3 Verify), the get-key buttons two per row, a key box, a Verify button, a "Remember my key" tick, a tries counter, extra buttons (Discord, Help) and a small tagline. Each get-key button is a dark card with the logo fitted inside; tap it and the link is copied, the border turns green and a small "Link copied" pill pops in at the corner (the logo stays visible). The key box is light so the black key icon shows. Wrong key: the card shakes. Right key: the padlock opens and it booms.
 
 ```lua
