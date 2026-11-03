@@ -1,6 +1,13 @@
 # RebelUI changelog (version stays 1.0.0)
 
 ## Latest
+- Repo moved to RebelUI/Library. Removed the Discord embed file and the black icons folder.
+- Close animations: Normal, BlackHole (rebuilt), Shatter, TVOff, Spin, Implode, Custom (full-screen picture or video), None. `Win:SetCloseAnimation`, `Tab:ClosePicker`, `UI.PreviewClose`, `UI.PlayCover`.
+- Explosion styles: Classic, Confetti, Shockwave, Sparks, Diamonds, Custom (your picture), None. `Win:SetBoomStyle`, `Tab:BoomPicker`. No "LET'S GO" / "BOOM" text by default.
+- Links are blue with an underline, a dark scan and a blue link icon (`Tab:Link`, link labels, rich-text links).
+- Summary tab: Print removed; added Files, Session, Important and Discord buttons.
+- Black hole close animation on the X of the main window (on by default; `Win.CloseAnimation = "None"` turns it off). The key panel only uses it with `CloseAnimation = "BlackHole"`. Also `Win:Close()` and `UI.BlackHole`.
+- New default key panel ("Card"): compact like a classic key system, with a Get Key drawer, Discord button, Check Key, status line, Paste button, Cooldown and many animations. `Layout = "Wide"` / `"Tall"` keep the older panels.
 - Developer tools: `UI.Debug`, `UI.OnError`, `UI.Errors`, `UI.Log`.
 - Live translations: `UI:AddLanguage`, `UI:SetLanguage`, `UI.T`.
 - Move elements: `obj:MoveUp()`, `obj:MoveDown()`, `obj:MoveTo(n)`.
