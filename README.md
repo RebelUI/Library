@@ -4,8 +4,8 @@
 
 <p align="center">
   <a href="https://discord.gg/8s7RR3wZ6b"><img alt="Join the Discord" src="https://img.shields.io/badge/JOIN%20THE%20DISCORD-5865F2?style=for-the-badge&logo=discord&logoColor=white"></a>
-  <a href="https://raw.githubusercontent.com/rizqadeeb38-dev/Rebelwar_UI/main/source.lua"><img alt="source.lua" src="https://img.shields.io/badge/GET%20source.lua-e94b35?style=for-the-badge&logo=lua&logoColor=white"></a>
-  <a href="https://raw.githubusercontent.com/rizqadeeb38-dev/Rebelwar_UI/main/Example.lua"><img alt="Example.lua" src="https://img.shields.io/badge/TRY%20Example.lua-2ea043?style=for-the-badge&logo=roblox&logoColor=white"></a>
+  <a href="https://raw.githubusercontent.com/RebelUI/Library/main/source.lua"><img alt="source.lua" src="https://img.shields.io/badge/GET%20source.lua-e94b35?style=for-the-badge&logo=lua&logoColor=white"></a>
+  <a href="https://raw.githubusercontent.com/RebelUI/Library/main/Example.lua"><img alt="Example.lua" src="https://img.shields.io/badge/TRY%20Example.lua-2ea043?style=for-the-badge&logo=roblox&logoColor=white"></a>
   <a href="#build-it-yourself"><img alt="Docs" src="https://img.shields.io/badge/READ%20THE%20DOCS-f5a524?style=for-the-badge&logo=readthedocs&logoColor=white"></a>
 </p>
 
@@ -20,7 +20,7 @@
 <p align="center"><b>Run it in one line</b></p>
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/rizqadeeb38-dev/Rebelwar_UI/main/Example.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/RebelUI/Library/main/Example.lua"))()
 ```
 
 RebelUI gives you a finished panel in a few lines: a spinning-ring window with embers, tabs that have a **Roblox image next to the name** and their own header, **every kind of toggle** (name, description, icon, color, locked, key, checkbox), sliders, dropdowns, color pickers, notifications, a **top bar** where the player chooses what shows (FPS, Timer, Logo and more), a **loading screen**, 14 themes that change live, and saving.
@@ -62,7 +62,7 @@ Made by **prorizz196**. Discord: https://discord.gg/8s7RR3wZ6b
 Paste this into your executor. It shows the loading screen, then a panel with every element:
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/rizqadeeb38-dev/Rebelwar_UI/main/Example.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/RebelUI/Library/main/Example.lua"))()
 ```
 
 The demo is `Example.lua` in this repo. Read it next to this tutorial, it uses everything.
@@ -70,7 +70,7 @@ The demo is `Example.lua` in this repo. Read it next to this tutorial, it uses e
 ### Use the library in your own script
 
 ```lua
-local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/rizqadeeb38-dev/Rebelwar_UI/main/source.lua"))()
+local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/RebelUI/Library/main/source.lua"))()
 
 local Win = UI:CreateWindow({ Title = "My Panel", Subtitle = "made by me", Icon = 114659273298746 })
 local Bar = Win:CreateBar({ Items = { "FPS", "Logo", "Timer" }, Logo = 114659273298746 })
@@ -2067,11 +2067,10 @@ The panel keeps gliding a little when you let go while dragging (`Inertia = fals
 
 | File | What it is |
 |---|---|
-| `source.lua` | The library (RebelUI v1.0.0). Load it with `loadstring(game:HttpGet("https://raw.githubusercontent.com/rizqadeeb38-dev/Rebelwar_UI/main/source.lua"))()` |
+| `source.lua` | The library (RebelUI v1.0.0). Load it with `loadstring(game:HttpGet("https://raw.githubusercontent.com/RebelUI/Library/main/source.lua"))()` |
 | `Example.lua` | The demo panel with the loading screen. It uses every element and every kind of toggle. Copy parts into your own script |
 | `README.md` | This tutorial |
 | `MyScript.lua` | A small starter script: copy it, change the names |
-| `DISCORD_POSTS.md` | Ready-to-paste posts for the `#examples` and `#documentation` channels |
 | `LICENSE` | MIT license |
 
 ## Help and community
@@ -2493,7 +2492,7 @@ Win:SetTrail(true, "Rainbow") -- sparkles follow your finger (Win:SetTrail(false
 
 `Example.lua` has all of these on the **Media** tab (inside Main). Song links need an executor with `getcustomasset`; plain Roblox audio ids work everywhere (many old audio ids are private now, so test yours).
 
-## Summary tab: everything the player did, plus 8 icon buttons
+## Summary tab: everything the player did, plus 11 icon buttons
 
 `Win:CreateNotificationsTab()` is the Summary. It lists every alert **and every action**: toggles ("Turned Aimbot ON"), sliders ("Set Speed to 55"), dropdowns, buttons, inputs, keybinds and tab changes. Keys and passwords typed in an Input are shown as `(hidden)`. Two rows of icon buttons sit on top, each with its own job:
 
@@ -2503,10 +2502,13 @@ Win:SetTrail(true, "Rainbow") -- sparkles follow your finger (Win:SetTrail(false
 | Search | Filters the feed with the search box |
 | Refresh | Rebuilds the feed (spins while it works) |
 | Copy | Copies the whole summary to the clipboard |
-| Print | Prints it in the console and writes `RebelUI_summary.txt` |
 | Save | Saves it to a file (spins while it works) |
 | Share | Copies a Discord-ready code block |
 | Export | Saves everything as JSON (spins while it works) |
+| Files | Shows which summary files are saved |
+| Session | Today's date, how long the panel was open, first and latest action |
+| Important | Switches between everything and only warnings and errors |
+| Discord | Copies the Discord invite |
 
 **Async buttons.** Give an icon button `Async = true` and its icon turns into the loading icon: it spins slow, then fast for 5 seconds, then slow, then stops, and repeats until your callback calls `done(true)` (or `done(false)` to flash a failure). The spinner shows for at least 1.5 seconds.
 
@@ -2543,6 +2545,52 @@ cd:Start(); cd:Pause(); cd:Reset(60); print(cd:Get()) -- seconds left
 
 A live timer with a bar and a Start / Pause / Again button.
 
+## Close animations, explosion styles and links
+
+**Close animations.** Pick what happens when the X is pressed: `Normal`, `BlackHole`, `Shatter`, `TVOff`, `Spin`, `Implode`, `Custom` (a picture or video covers the whole screen) or `None`.
+
+```lua
+local Win = UI:CreateWindow({ Title = "My Hub", CloseAnimation = "Shatter" })
+Win:SetCloseAnimation("Custom", "https://example.com/bye.mp4")  -- a link, file name or asset id; .mp4/.webm = video
+Tab:ClosePicker()                 -- a dropdown + a box for your picture/video + a Preview button (also in the Settings tab)
+UI.PreviewClose(Win, "BlackHole") -- plays it on a small test card
+UI.PlayCover(Win.Gui, "rbxassetid://123456", { Time = 2 }) -- a full-screen picture or video, any time you like
+```
+
+The key panel only plays a close animation if you ask: `UI:KeyGate({ CloseAnimation = "BlackHole", CloseMedia = "..." })`.
+
+**Explosion styles.** `Classic`, `Confetti`, `Shockwave`, `Sparks`, `Diamonds`, `Custom` (your own picture flies out) or `None`. No words are shown unless you pass `Text`.
+
+```lua
+Win:SetBoomStyle("Custom", "rbxassetid://123456")
+Win:Boom({})                       -- uses the window's style
+Tab:BoomPicker()                   -- picker + preview (also in the Settings tab)
+UI:KeyGate({ BoomStyle = "Confetti" })
+```
+
+**Links.** Any link is shown in blue with a line under it, a dark scan that sweeps across it, and a blue link icon on the left. Tap = copy.
+
+```lua
+Tab:Link({ Url = "https://discord.gg/8s7RR3wZ6b", Name = "Our Discord", Description = "Tap to copy" })
+Tab:Label("https://example.com")            -- a label that is only a link becomes a link
+Tab:Label("read https://example.com now")   -- links inside text turn blue and underlined
+```
+
+## The black hole close animation
+
+The default close animation of the main window. The world dims, a three-ring accretion disk and an event horizon open over the panel, sparks spiral in along three orbits, the panel is stretched thin, spun and swallowed, then the hole collapses in a shockwave, a flash and an explosion (about 2.3 seconds).
+
+```lua
+UI:KeyGate({ ..., CloseAnimation = "BlackHole" })  -- the key panel does NOT use it unless you ask (default: closes quickly)
+local Win = UI:CreateWindow({ ... })
+Win.CloseAnimation = "None"                        -- close the window at once
+Win:Close()                                        -- what the X button calls: animation, then Destroy()
+Win:Destroy()                                      -- closes immediately, no animation
+UI.BlackHole(gui, someFrame, { Color = Color3.fromRGB(255, 70, 80), Move = true }) -- use it on your own frames
+```
+
+Turning on reduce-motion (`ReduceMotion`) skips the animation.
+
 ## How long a key lasts
 
 ```lua
@@ -2567,7 +2615,7 @@ The accepted message shows "Key valid for 1h 0m". The expiry time is saved next 
 **Shortest working script**
 
 ```lua
-local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/rizqadeeb38-dev/Rebelwar_UI/main/source.lua"))()
+local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/RebelUI/Library/main/source.lua"))()
 local Win = UI:CreateWindow({ Title = "My Hub" })
 local Tab = Win:CreateTab({ Name = "Main" })
 Tab:Toggle({ Name = "Speed", Callback = function(on) print(on) end })
@@ -2626,7 +2674,7 @@ UI.IconMode = "White" -- RebelUI downloads each icon once, turns it white, saves
 UI.IconMode = "Glow"  -- black icon with a soft white glow
 ```
 
-The "black icons" folder holds clean black PNGs of the main icons. Upload them to Roblox and list their ids in the `WHITE` table at the top of `Example.lua` (or set `UI.Icons.key = 123456`) if you want your own copies. Black icons are hard to see on a dark theme, so use `UI.IconMode = "White"` there.
+To use your own icon pictures, upload them to Roblox and list their ids in the `WHITE` table at the top of `Example.lua` (or set `UI.Icons.key = 123456`). Black icons are hard to see on a dark theme, so use `UI.IconMode = "White"` there.
 
 ## What is not in here (and why)
 
