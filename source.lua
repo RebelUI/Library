@@ -4,7 +4,7 @@
     Same look as the Rebelwar Hub: spinning ring, embers, glowing tabs, shiny buttons,
     pill toggles, a top bar you can fill with FPS / Timer / Logo and more, and a loading screen.
 
-    local UI  = loadstring(game:HttpGet("https://raw.githubusercontent.com/rizqadeeb38-dev/Rebelwar_UI/main/source.lua"))()
+    local UI  = loadstring(game:HttpGet("https://raw.githubusercontent.com/RebelUI/Library/main/source.lua"))()
 
     local Load = UI:Loading({ Title = "Rebelwar", Logo = 114659273298746 })   -- optional loading screen
     Load:Status("Starting..."); Load:Progress(0.6)
@@ -120,7 +120,7 @@ local THEMES = {
 	Colorblind = makeTheme(rgb(0, 114, 178), { Glow = rgb(86, 180, 233), Dark = rgb(0, 50, 80) }),
 }
 RebelUI.Themes = { "Red", "Crimson", "Blue", "Green", "Purple", "Orange", "Pink", "Gold", "Cyber", "Blood", "Ice", "Mono", "Contrast", "Colorblind" }
-RebelUI.SourceUrl = "https://raw.githubusercontent.com/rizqadeeb38-dev/Rebelwar_UI/main/source.lua"
+RebelUI.SourceUrl = "https://raw.githubusercontent.com/RebelUI/Library/main/source.lua"
 RebelUI.Lang = {} -- text translations, see RebelUI:SetLanguage
 
 local C = {
@@ -258,13 +258,18 @@ function RebelUI._iconFix(img, src, tint)
 		end)
 		return
 	end
-	if RebelUI.IconMode == "Black" then
+	local tintC = RebelUI._iconColor and RebelUI._iconColor[img] -- a colored icon (the blue link icon): turned white, then tinted
+	local mode = tintC and "White" or RebelUI.IconMode
+	if mode == "Black" then
 		img.BackgroundTransparency = 1
 		return -- the plain black icon, nothing behind it
 	end
+	if tintC then
+		img.ImageColor3 = tintC
+	end
 	local halos = {}
 	haloOf[img] = halos
-	if RebelUI.IconMode ~= "Glow" and RebelUI._whitenIcon and RebelUI._whitenIcon(img, k, halos) then
+	if mode ~= "Glow" and RebelUI._whitenIcon and RebelUI._whitenIcon(img, k, halos) then
 		return -- the white version is already saved: no glow needed
 	end
 	if not RebelUI.IconGlow then
@@ -284,7 +289,7 @@ function RebelUI._iconFix(img, src, tint)
 			f.AnchorPoint = Vector2.new(0.5, 0.5)
 			f.Position = UDim2.new(P.X.Scale + (0.5 - A.X) * S.X.Scale, P.X.Offset + (0.5 - A.X) * S.X.Offset, P.Y.Scale + (0.5 - A.Y) * S.Y.Scale, P.Y.Offset + (0.5 - A.Y) * S.Y.Offset)
 			f.Size = UDim2.new(S.X.Scale, S.X.Offset + h[1], S.Y.Scale, S.Y.Offset + h[1])
-			f.BackgroundColor3 = RebelUI.IconGlowColor
+			f.BackgroundColor3 = tintC or RebelUI.IconGlowColor
 			f.BackgroundTransparency = h[2]
 			f.BorderSizePixel = 0
 			f.Active = false
@@ -1365,6 +1370,10 @@ function RebelUI:CreateWindow(o)
 		ToggleKey = o.ToggleKey or Enum.KeyCode.RightShift,
 		AnimSpeed = o.AnimSpeed or 1,
 		OpenAnim = o.OpenAnimation or "Pop",
+		CloseAnimation = o.CloseAnimation or "BlackHole", -- Normal, BlackHole, Shatter, TVOff, Spin, Implode, Custom (with CloseMedia), None
+		CloseMedia = o.CloseMedia,
+		BoomStyle = o.BoomStyle, -- Classic, Confetti, Shockwave, Sparks, Diamonds, Custom (with BoomImage), None
+		BoomImage = o.BoomImage,
 		ReduceMotion = o.ReduceMotion == true,
 		ToggleStyle = o.ToggleStyle, -- "Switch", "Sharp", "Checkbox", "Check", "Radio", "Heart", "Star" (a Toggle can still pick its own Style)
 		SliderStyle = o.SliderStyle, -- "Sharp" gives diamond knobs and square bars
@@ -2081,18 +2090,19 @@ function Window:_scramble(lbl, text)
 	end)
 end
 
--- Win:Close(): what the X button does. Plays the black hole animation, then Destroy(). Win.CloseAnimation = "None" closes at once.
+-- Win:Close(): what the X button does. Plays the close animation (Win.CloseAnimation: Normal, BlackHole, Shatter, TVOff, Spin, Implode, Custom, None), then Destroy().
 function Window:Close()
 	if self._closing or self._dead then
 		return
 	end
-	if self.CloseAnimation == "None" or self.ReduceMotion or not self.Main or not self.Gui or not RebelUI.BlackHole then
+	local style = self.CloseAnimation or "BlackHole"
+	if style == "None" or self.ReduceMotion or not self.Main or not self.Gui or not RebelUI.CloseEffect then
 		self:Destroy()
 		return
 	end
 	self._closing = true
 	task.spawn(function()
-		pcall(RebelUI.BlackHole, self.Gui, self.Main, { Color = self.Theme and self.Theme.Glow, Move = true })
+		pcall(RebelUI.CloseEffect, self.Gui, self.Main, style, { Color = self.Theme and self.Theme.Glow, Move = true, Media = self.CloseMedia })
 		self:Destroy()
 	end)
 end
@@ -3224,6 +3234,15 @@ function Tab:Label(text)
 	l.Size = UDim2.new(1, 0, 0, 14)
 	l.AutomaticSize = Enum.AutomaticSize.Y
 	l.LayoutOrder = self:_next()
+	local onlyUrl = type(text) == "string" and text:match("^https?://%S+$")
+	if onlyUrl then
+		RebelUI._linkFx(l, { Url = onlyUrl, OnClick = function(_, ok)
+			self.Win:Notify({ Type = ok and "success" or "warn", Title = ok and "Link copied" or "Can't copy", Text = onlyUrl })
+		end })
+	elseif type(text) == "string" and text:find("https?://") then
+		l.RichText = true
+		l.Text = RebelUI._richLinks(text)
+	end
 	local obj = {}
 	function obj:Set(v)
 		l.Text = tostring(v)
@@ -4538,6 +4557,10 @@ function Tab:Paragraph(o)
 	t.Size = UDim2.new(1, 0, 0, 14)
 	t.LayoutOrder = 1
 	local b = label(row, o.Text or "", 9, C.Dim, false)
+	if type(o.Text) == "string" and o.Text:find("https?://") then
+		b.RichText = true
+		b.Text = RebelUI._richLinks(o.Text)
+	end
 	b.TextWrapped = true
 	b.TextTruncate = Enum.TextTruncate.None
 	b.Size = UDim2.new(1, 0, 0, 0)
@@ -6943,6 +6966,8 @@ function Window:CreateSettingsTab(o)
 			end)
 		end,
 	})
+	tab:ClosePicker({ Section = false })
+	tab:BoomPicker({ Section = false })
 	tab:Slider({
 		Name = "Animation speed",
 		Min = 0.5,
@@ -7272,6 +7297,7 @@ function Window:CreateSettingsTab(o)
 		Text = (cr.Text or "Made by prorizz196. Thank you for using it!") .. (cr.Discord and ("\n" .. cr.Discord) or ""),
 	})
 	if cr.Discord then
+		tab:Link({ Url = cr.Discord, Name = cr.Discord })
 		tab:Button({ Name = "Copy Discord invite", Callback = function()
 			local ok = type(setclipboard) == "function" and pcall(setclipboard, cr.Discord)
 			win:Notify({ Title = ok and "Copied!" or "Can't copy", Text = ok and "Paste it in your browser." or cr.Discord, Type = ok and "success" or "warn" })
@@ -7914,7 +7940,7 @@ function RebelUI:KeyGate(o)
 		end
 		if o.OpenBoom ~= false then
 			task.delay(0.35, function()
-				pcall(RebelUI.Boom, gui, { Color = accent, Count = 18 })
+				pcall(RebelUI.Boom, gui, { Color = accent, Count = 18, Style = o.BoomStyle, Image = o.BoomImage })
 			end)
 		end
 		-- the Check Key button is dimmer while the box is empty
@@ -7983,7 +8009,7 @@ function RebelUI:KeyGate(o)
 						tween(scl, 0.15, { Scale = scl.Scale * 1.04 }, Enum.EasingStyle.Quad)
 					end
 					if o.Boom ~= false then
-						pcall(RebelUI.Boom, gui, { Color = theme.Glow, Count = 28, Text = o.BoomText })
+						pcall(RebelUI.Boom, gui, { Color = theme.Glow, Count = 28, Text = o.BoomText, Style = o.BoomStyle, Image = o.BoomImage })
 						task.wait(0.9)
 					else
 						task.wait(0.5)
@@ -8039,8 +8065,8 @@ function RebelUI:KeyGate(o)
 		if o.Blur ~= false then
 			RebelUI.Blur(0, 0.6)
 		end
-		if closedByX and o.CloseAnimation == "BlackHole" and not o.ReduceMotion then
-			RebelUI.BlackHole(gui, card, { Color = accent, Move = true })
+		if closedByX and o.CloseAnimation and o.CloseAnimation ~= "None" and not o.ReduceMotion then
+			RebelUI.CloseEffect(gui, card, o.CloseAnimation == true and "BlackHole" or o.CloseAnimation, { Color = accent, Move = true, Media = o.CloseMedia })
 		end
 		tween(scl, 0.2, { Scale = 0.7 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 		tween(back, 0.2, { BackgroundTransparency = 1 })
@@ -8446,7 +8472,7 @@ function RebelUI:KeyGate(o)
 	end
 	if o.OpenBoom ~= false then
 		task.delay(0.3, function()
-			pcall(RebelUI.Boom, gui, { Color = theme.Glow, Count = 18 })
+			pcall(RebelUI.Boom, gui, { Color = theme.Glow, Count = 18, Style = o.BoomStyle, Image = o.BoomImage })
 		end)
 	end
 
@@ -8491,7 +8517,7 @@ function RebelUI:KeyGate(o)
 				end
 				savedKey = k
 				if o.Boom ~= false then
-					pcall(RebelUI.Boom, gui, { Color = theme.Glow, Count = 28, Text = o.BoomText })
+					pcall(RebelUI.Boom, gui, { Color = theme.Glow, Count = 28, Text = o.BoomText, Style = o.BoomStyle, Image = o.BoomImage })
 					task.wait(0.9)
 				else
 					task.wait(0.5)
@@ -8547,8 +8573,8 @@ function RebelUI:KeyGate(o)
 	if o.Blur ~= false then
 		RebelUI.Blur(0, 0.6)
 	end
-	if closedByX and o.CloseAnimation == "BlackHole" and not o.ReduceMotion then
-		RebelUI.BlackHole(gui, card, { Color = theme.Glow, Move = true })
+	if closedByX and o.CloseAnimation and o.CloseAnimation ~= "None" and not o.ReduceMotion then
+		RebelUI.CloseEffect(gui, card, o.CloseAnimation == true and "BlackHole" or o.CloseAnimation, { Color = theme.Glow, Move = true, Media = o.CloseMedia })
 	end
 	tween(scl, 0.2, { Scale = 0.7 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 	tween(back, 0.2, { BackgroundTransparency = 1 })
@@ -11273,87 +11299,7 @@ function RebelUI._imageEffect(img, effect, theme)
 	end
 end
 
--- RebelUI.BlackHole(gui, target, { Color, Move, ReduceMotion }): the close animation. A black hole with a glowing, spinning ring opens
--- over `target`, sparks spiral into it, `target` spins and shrinks into the hole, the hole collapses with a flash and a boom, and it is gone.
--- Yields for about 1.6 seconds. Used by the X buttons (Win.CloseAnimation = "None" or KeyGate({ CloseAnimation = "None" }) turns it off).
-function RebelUI.BlackHole(gui, target, o)
-	o = o or {}
-	local color = o.Color or Color3.fromRGB(255, 70, 80)
-	if o.ReduceMotion or not (gui and target and target.Parent) then
-		return
-	end
-	local okPos, cx, cy = pcall(function()
-		local ap, as, gp = target.AbsolutePosition, target.AbsoluteSize, gui.AbsolutePosition
-		if as.X <= 0 or as.Y <= 0 then
-			error("no size")
-		end
-		return ap.X + as.X / 2 - gp.X, ap.Y + as.Y / 2 - gp.Y
-	end)
-	local pos = okPos and UDim2.fromOffset(cx, cy) or UDim2.fromScale(0.5, 0.5)
-	local sc = target:FindFirstChildOfClass("UIScale") or new("UIScale", { Scale = 1 }, target)
-	local layer = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Active = false, ZIndex = 200 }, gui)
-	-- soft glow + the hole itself
-	local glow = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = pos, Size = UDim2.fromOffset(0, 0), BackgroundColor3 = color, BackgroundTransparency = 0.82, BorderSizePixel = 0, ZIndex = 201 }, layer)
-	new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, glow)
-	local hole = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = pos, Size = UDim2.fromOffset(0, 0), BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0, ZIndex = 203 }, layer)
-	new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, hole)
-	local ring = new("UIStroke", { Color = color, Thickness = 5 }, hole)
-	local rg = new("UIGradient", { Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, color), ColorSequenceKeypoint.new(0.5, Color3.new(1, 1, 1)), ColorSequenceKeypoint.new(1, color) }) }, ring)
-	local alive = true
-	task.spawn(function()
-		local r = 0
-		while alive and layer.Parent do
-			r = (r + 18) % 360
-			rg.Rotation = r
-			task.wait(0.03)
-		end
-	end)
-	tween(hole, 0.4, { Size = UDim2.fromOffset(84, 84) }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-	tween(glow, 0.5, { Size = UDim2.fromOffset(150, 150) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-	-- sparks that spiral into the hole (they live in a frame that spins)
-	local size = 1000
-	pcall(function()
-		local s = gui.AbsoluteSize
-		if s.X > 0 then
-			size = math.max(s.X, s.Y) * 1.3
-		end
-	end)
-	local spin = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = pos, Size = UDim2.fromOffset(size, size), BackgroundTransparency = 1, ZIndex = 202 }, layer)
-	for i = 1, 30 do
-		local dot = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(math.random(), math.random()), Size = UDim2.fromOffset(math.random(4, 9), math.random(4, 9)), BackgroundColor3 = (i % 3 == 0) and Color3.new(1, 1, 1) or color, BorderSizePixel = 0, ZIndex = 202 }, spin)
-		new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, dot)
-		task.delay(i * 0.012, function()
-			tween(dot, 0.55 + math.random() * 0.4, { Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(1, 1), BackgroundTransparency = 0.6 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-		end)
-	end
-	tween(spin, 1.1, { Rotation = -420 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-	task.wait(0.25)
-	-- the panel spins and is pulled into the hole
-	pcall(function()
-		tween(target, 0.8, { Rotation = 300 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-		if o.Move and target.AnchorPoint == Vector2.new(0.5, 0.5) then
-			tween(target, 0.8, { Position = pos }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-		end
-	end)
-	tween(sc, 0.8, { Scale = 0.02 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-	task.wait(0.8)
-	pcall(function()
-		target.Visible = false
-	end)
-	-- the hole swells, then collapses with a flash and a boom
-	tween(hole, 0.12, { Size = UDim2.fromOffset(120, 120) }, Enum.EasingStyle.Quad)
-	task.wait(0.12)
-	tween(hole, 0.18, { Size = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-	tween(glow, 0.25, { Size = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-	local flash = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.35, BorderSizePixel = 0, ZIndex = 210 }, layer)
-	tween(flash, 0.35, { BackgroundTransparency = 1 })
-	pcall(RebelUI.Boom, layer, { Color = color, Count = 36 })
-	task.wait(0.4)
-	alive = false
-	layer:Destroy()
-end
-
-function RebelUI.Boom(parent, o)
+function RebelUI._classicBoom(parent, o)
 	o = o or {}
 	if not parent then
 		return
@@ -11421,7 +11367,7 @@ function Window:Boom(o)
 		local m = self.Main
 		origin = UDim2.fromOffset(m.AbsolutePosition.X + m.AbsoluteSize.X / 2, m.AbsolutePosition.Y + m.AbsoluteSize.Y / 2)
 	end)
-	RebelUI.Boom(self.Gui, { Color = o.Color or self.Theme.Glow, Count = o.Count or 30, Text = o.Text, Origin = origin })
+	RebelUI.Boom(self.Gui, { Color = o.Color or self.Theme.Glow, Count = o.Count or 30, Text = o.Text, Origin = origin, Style = o.Style or self.BoomStyle, Image = o.Image or self.BoomImage })
 	if o.Shake ~= false then
 		self:Shake(1.6, 0.35)
 	end
@@ -11977,6 +11923,7 @@ function Window:CreateNotificationsTab(o)
 	local total, errs, warns, did = 0, 0, 0, 0
 	local tab
 	local filter = ""
+	local importantOnly = false
 	local function passes(...)
 		if filter == "" then
 			return true
@@ -11989,7 +11936,7 @@ function Window:CreateNotificationsTab(o)
 		return false
 	end
 	local function showAction(a)
-		if not act or not passes(a.Title, a.Detail) then
+		if not act or importantOnly or not passes(a.Title, a.Detail) then
 			return
 		end
 		act:Add({ Kind = a.Kind or "command", Title = a.Title, Detail = a.Time .. (a.Detail ~= "" and ("  " .. a.Detail) or "") })
@@ -12000,6 +11947,9 @@ function Window:CreateNotificationsTab(o)
 	end
 	local function show(n)
 		if not act or not passes(n.Title, n.Text, n.Type) then
+			return
+		end
+		if importantOnly and n.Type ~= "error" and n.Type ~= "warn" then
 			return
 		end
 		local kind = (n.Type == "success" or n.Type == "warn" or n.Type == "error") and n.Type or "info"
@@ -12088,15 +12038,15 @@ function Window:CreateNotificationsTab(o)
 					win:Notify({ Type = ok and "success" or "warn", Title = ok and "Summary copied" or "Can't copy", Text = ok and "Paste it anywhere." or "Your executor has no clipboard." })
 				end },
 			})
+			local function savedFiles()
+				local lines = {}
+				for _, f in ipairs({ "RebelUI_summary.txt", "RebelUI_summary.json" }) do
+					local has = type(isfile) == "function" and isfile(f)
+					lines[#lines + 1] = f .. (has and "   (saved)" or "   (not saved yet)")
+				end
+				return table.concat(lines, "\n")
+			end
 			t:IconButtons({
-				{ Icon = RebelUI.Icons.printer, Name = "Print", Done = "Printed", Callback = function()
-					print(win:GetSummaryText())
-					local saved = false
-					if type(writefile) == "function" then
-						saved = pcall(writefile, "RebelUI_summary.txt", win:GetSummaryText())
-					end
-					win:Notify({ Type = "info", Title = "Printed", Text = saved and "Written to the console and RebelUI_summary.txt" or "Written to the console." })
-				end },
 				{ Icon = RebelUI.Icons.save, Name = "Save", Async = true, Working = "Saving", Done = "Saved", Callback = function(done)
 					local ok = type(writefile) == "function" and pcall(writefile, "RebelUI_summary.txt", win:GetSummaryText())
 					task.wait(0.2)
@@ -12118,6 +12068,33 @@ function Window:CreateNotificationsTab(o)
 					task.wait(0.2)
 					win:Notify({ Type = ok and "success" or "warn", Title = ok and "Exported" or "Can't export", Text = ok and "RebelUI_summary.json in your workspace folder." or "Your executor can't write files." })
 					done(ok)
+				end },
+				{ Icon = RebelUI.Icons.file, Name = "Files", Callback = function()
+					win:Dialog({ Title = "Saved files", Text = savedFiles() .. "\n\nThey are in your executor's workspace folder.", Buttons = { { Name = "Close" } } })
+				end },
+			})
+			t:IconButtons({
+				{ Icon = RebelUI.Icons.calendar, Name = "Session", Callback = function()
+					local secs = math.floor(os.clock() - (win._born or os.clock()))
+					local first = (win._actions or {})[1]
+					local last = (win._actions or {})[#(win._actions or {})]
+					win:Dialog({ Title = "This session", Text = table.concat({
+						"Today: " .. os.date("%Y-%m-%d"),
+						"Now: " .. os.date("%H:%M:%S"),
+						string.format("Open for: %dm %ds", secs // 60, secs % 60),
+						"First action: " .. (first and (first.Time .. "  " .. tostring(first.Title)) or "none yet"),
+						"Latest action: " .. (last and (last.Time .. "  " .. tostring(last.Title)) or "none yet"),
+					}, "\n"), Buttons = { { Name = "Close" } } })
+				end },
+				{ Icon = RebelUI.Icons.star, Name = "Important", Callback = function()
+					importantOnly = not importantOnly
+					reload()
+					win:Notify({ Type = "info", Title = importantOnly and "Showing only warnings and errors" or "Showing everything", Text = "Tap Important again to switch." })
+				end },
+				{ Icon = RebelUI.Icons.link, Name = "Discord", Done = "Copied", Callback = function()
+					local link = win.DiscordLink or (RebelUI.Credits and RebelUI.Credits.Discord) or "https://discord.gg/8s7RR3wZ6b"
+					local ok = type(setclipboard) == "function" and pcall(setclipboard, link)
+					win:Notify({ Type = ok and "success" or "warn", Title = ok and "Link copied" or "Can't copy", Text = ok and link or "Your executor has no clipboard." })
 				end },
 			})
 			t:Button({ Name = "Clear the summary", Callback = function()
@@ -12392,7 +12369,7 @@ function RebelUI:Activate(o)
 			lock.Image = asset(RebelUI.Icons.openpadlock)
 		end)
 		lbl.Text = "ACTIVATED"
-		pcall(RebelUI.Boom, sg, { Color = theme.Glow, Count = 40, Text = o.BoomText or "LET'S GO!" })
+		pcall(RebelUI.Boom, sg, { Color = theme.Glow, Count = 40, Text = o.BoomText, Style = o.BoomStyle, Image = o.BoomImage })
 		task.delay(0.9, function()
 			finish(true)
 		end)
@@ -13629,6 +13606,641 @@ function RebelUI._whitenIcon(img, id, halos)
 		pump()
 	end
 	return false
+end
+
+-- ============================================================ cover media, explosion styles, close animations, links
+-- RebelUI.PlayCover(gui, src, { Time, Type = "image" | "video", Volume, OnCovered }) -> true if the picture / video was shown.
+-- A picture or video that covers the whole screen for a moment (used by the "Custom" close animation and "Custom" explosion).
+function RebelUI.PlayCover(gui, src, o)
+	o = o or {}
+	if not gui or src == nil or tostring(src) == "" then
+		return false
+	end
+	local s = tostring(src):lower()
+	local isVideo = o.Type == "video" or s:find("%.mp4") ~= nil or s:find("%.webm") ~= nil or s:find("%.mov") ~= nil
+	local cover = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 1, BorderSizePixel = 0, Active = true, ZIndex = 400 }, gui)
+	tween(cover, 0.25, { BackgroundTransparency = 0 })
+	task.wait(0.27)
+	if o.OnCovered then
+		pcall(o.OnCovered)
+	end
+	local shown = false
+	local maxT = o.Time or (isVideo and 6 or 2)
+	local t0 = os.clock()
+	if isVideo then
+		local ok, resolved = pcall(RebelUI.ResolveMedia, src, o.File)
+		if ok and resolved then
+			local okV = pcall(function()
+				local vf = new("VideoFrame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Looped = false, Volume = o.Volume or 0.6, Video = resolved, ZIndex = 401 }, cover)
+				vf.Playing = true
+				shown = true
+				local ended = false
+				vf.Ended:Connect(function()
+					ended = true
+				end)
+				while not ended and os.clock() - t0 < maxT and cover.Parent do
+					task.wait(0.1)
+				end
+			end)
+			shown = shown and okV
+		end
+	else
+		local im = new("ImageLabel", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Crop, ImageTransparency = 1, ZIndex = 401 }, cover)
+		RebelUI.SetImage(im, src, function(okI)
+			if okI and im.Parent then
+				shown = true
+				tween(im, 0.3, { ImageTransparency = 0 })
+			end
+		end)
+		task.wait(0.5)
+		while os.clock() - t0 < maxT and cover.Parent do
+			task.wait(0.1)
+		end
+	end
+	tween(cover, 0.3, { BackgroundTransparency = 1 })
+	for _, d in ipairs(cover:GetChildren()) do
+		pcall(function()
+			if d:IsA("ImageLabel") then
+				tween(d, 0.3, { ImageTransparency = 1 })
+			end
+		end)
+	end
+	task.wait(0.32)
+	cover:Destroy()
+	return shown
+end
+
+-- ---------- explosion styles: UI.Boom(parent, { Style = "Classic" | "Confetti" | "Shockwave" | "Sparks" | "Diamonds" | "Custom" | "None", Image, Media, Color, Count })
+RebelUI.BoomStyles = { "Classic", "Confetti", "Shockwave", "Sparks", "Diamonds", "Custom", "None" }
+RebelUI.BoomStyle = "Classic"
+RebelUI.BoomImage = nil -- the picture used by the "Custom" style (asset id or link)
+local BOOMS = {}
+local function boomHolder(parent, o)
+	local color = o.Color or Color3.fromRGB(255, 200, 80)
+	local origin = o.Origin or UDim2.fromScale(0.5, 0.5)
+	local vp = (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize) or Vector2.new(800, 450)
+	local holder = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 300, Active = false }, parent)
+	local flash = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = color:Lerp(Color3.new(1, 1, 1), 0.6), BackgroundTransparency = 0.7, BorderSizePixel = 0, ZIndex = 300 }, holder)
+	tween(flash, 0.3, { BackgroundTransparency = 1 })
+	return holder, color, origin, math.min(vp.X, vp.Y) * 0.55
+end
+local function around(origin, ang, dist)
+	return UDim2.new(origin.X.Scale, origin.X.Offset + math.cos(ang) * dist, origin.Y.Scale, origin.Y.Offset + math.sin(ang) * dist)
+end
+BOOMS.Confetti = function(parent, o)
+	local holder, color, origin, R = boomHolder(parent, o)
+	local palette = { color, Color3.new(1, 1, 1), Color3.fromRGB(255, 205, 70), Color3.fromRGB(255, 90, 170), Color3.fromRGB(70, 210, 255), Color3.fromRGB(110, 255, 150) }
+	local n = math.clamp(math.floor((o.Count or 24) * 1.6), 12, 70)
+	for i = 1, n do
+		local ang = -math.pi / 2 + (math.random() - 0.5) * 2.6
+		local dist = R * (0.4 + math.random() * 0.8)
+		local p = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = origin, Size = UDim2.fromOffset(math.random(6, 10), math.random(10, 16)), BackgroundColor3 = palette[(i % #palette) + 1], BorderSizePixel = 0, Rotation = math.random(0, 360), ZIndex = 302 }, holder)
+		tween(p, 0.45, { Position = around(origin, ang, dist), Rotation = p.Rotation + math.random(-200, 200) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		task.delay(0.45, function()
+			if p.Parent then
+				local pos = p.Position
+				tween(p, 0.95, { Position = UDim2.new(pos.X.Scale, pos.X.Offset + math.random(-40, 40), pos.Y.Scale, pos.Y.Offset + R * 0.9), BackgroundTransparency = 1, Rotation = p.Rotation + math.random(-300, 300) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+			end
+		end)
+	end
+	task.delay(1.7, function()
+		holder:Destroy()
+	end)
+end
+BOOMS.Shockwave = function(parent, o)
+	local holder, color, origin, R = boomHolder(parent, o)
+	for i = 1, 5 do
+		local r = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = origin, Size = UDim2.fromOffset(10, 10), BackgroundTransparency = 1, ZIndex = 301 }, holder)
+		corner(r, 500)
+		local st = new("UIStroke", { Color = i % 2 == 0 and Color3.new(1, 1, 1) or color, Thickness = 7 - i, Transparency = 0.05 }, r)
+		task.delay((i - 1) * 0.1, function()
+			if r.Parent then
+				tween(r, 0.8, { Size = UDim2.fromOffset(R * (0.7 + i * 0.35), R * (0.7 + i * 0.35)) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+				tween(st, 0.8, { Transparency = 1, Thickness = 1 })
+			end
+		end)
+	end
+	task.delay(1.5, function()
+		holder:Destroy()
+	end)
+end
+BOOMS.Sparks = function(parent, o)
+	local holder, color, origin, R = boomHolder(parent, o)
+	local n = math.clamp(math.floor((o.Count or 24) * 2), 16, 80)
+	for i = 1, n do
+		local ang = math.random() * math.pi * 2
+		local dist = R * (0.5 + math.random() * 1.1)
+		local sp = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = origin, Size = UDim2.fromOffset(2, math.random(14, 34)), BackgroundColor3 = (i % 4 == 0) and Color3.new(1, 1, 1) or color, BorderSizePixel = 0, Rotation = math.deg(ang) + 90, ZIndex = 302 }, holder)
+		tween(sp, 0.35 + math.random() * 0.3, { Position = around(origin, ang, dist), BackgroundTransparency = 1, Size = UDim2.fromOffset(1, 4) }, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+	end
+	task.delay(1.2, function()
+		holder:Destroy()
+	end)
+end
+BOOMS.Diamonds = function(parent, o)
+	local holder, color, origin, R = boomHolder(parent, o)
+	local n = math.clamp(math.floor(o.Count or 24), 8, 50)
+	for i = 1, n do
+		local ang = (i / n) * math.pi * 2 + math.random() * 0.4
+		local dist = R * (0.3 + math.random() * 0.8)
+		local sz = math.random(8, 20)
+		local d = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = origin, Size = UDim2.fromOffset(sz, sz), BackgroundColor3 = (i % 2 == 0) and color or Color3.new(1, 1, 1), BorderSizePixel = 0, Rotation = 45, ZIndex = 302 }, holder)
+		tween(d, 0.8 + math.random() * 0.3, { Position = around(origin, ang, dist), Rotation = 45 + math.random(-180, 180), BackgroundTransparency = 1, Size = UDim2.fromOffset(sz * 0.3, sz * 0.3) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	end
+	task.delay(1.4, function()
+		holder:Destroy()
+	end)
+end
+BOOMS.Custom = function(parent, o)
+	local img = o.Image or RebelUI.BoomImage
+	if img == nil or tostring(img) == "" then
+		return RebelUI._classicBoom(parent, o)
+	end
+	local holder, color, origin, R = boomHolder(parent, o)
+	local n = math.clamp(math.floor((o.Count or 24) * 0.7), 8, 30)
+	for i = 1, n do
+		local ang = (i / n) * math.pi * 2 + math.random() * 0.4
+		local dist = R * (0.35 + math.random() * 0.75)
+		local sz = math.random(26, 54)
+		local im = new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = origin, Size = UDim2.fromOffset(sz, sz), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit, ZIndex = 302 }, holder)
+		RebelUI.SetImage(im, img)
+		tween(im, 0.9 + math.random() * 0.3, { Position = around(origin, ang, dist), Rotation = math.random(-360, 360), ImageTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	end
+	task.delay(1.5, function()
+		holder:Destroy()
+	end)
+end
+function RebelUI.Boom(parent, o)
+	o = o or {}
+	if not parent then
+		return
+	end
+	local style = o.Style or RebelUI.BoomStyle or "Classic"
+	if style == "None" then
+		return
+	end
+	local fn = BOOMS[style]
+	if not fn then
+		return RebelUI._classicBoom(parent, o)
+	end
+	local ok, err = pcall(fn, parent, o)
+	if not ok then
+		RebelUI._reportError("boom " .. tostring(style), err)
+		pcall(RebelUI._classicBoom, parent, o)
+	end
+end
+
+-- ---------- close animations: what happens when the panel is closed
+RebelUI.CloseAnimations = { "Normal", "BlackHole", "Shatter", "TVOff", "Spin", "Implode", "Custom", "None" }
+local CLOSERS = {}
+local function centerOf(gui, target)
+	local ok, cx, cy, w, h = pcall(function()
+		local ap, as, gp = target.AbsolutePosition, target.AbsoluteSize, gui.AbsolutePosition
+		if as.X <= 0 or as.Y <= 0 then
+			error("no size")
+		end
+		return ap.X + as.X / 2 - gp.X, ap.Y + as.Y / 2 - gp.Y, as.X, as.Y
+	end)
+	if ok then
+		return UDim2.fromOffset(cx, cy), w, h, cx, cy
+	end
+	return UDim2.fromScale(0.5, 0.5), 320, 220, nil, nil
+end
+local function scaleOf(target)
+	return target:FindFirstChildOfClass("UIScale") or new("UIScale", { Scale = 1 }, target)
+end
+local function veil(target, color)
+	local v = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = color or Color3.new(0, 0, 0), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 999 }, target)
+	corner(v, 16)
+	return v
+end
+local function centered(target)
+	return target.AnchorPoint == Vector2.new(0.5, 0.5)
+end
+
+CLOSERS.Normal = function(gui, target, o)
+	local sc = scaleOf(target)
+	local v = veil(target)
+	tween(v, 0.3, { BackgroundTransparency = 0 }, Enum.EasingStyle.Quad)
+	tween(sc, 0.3, { Scale = sc.Scale * 0.82 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	task.wait(0.32)
+end
+CLOSERS.Spin = function(gui, target, o)
+	local sc = scaleOf(target)
+	tween(target, 0.65, { Rotation = 540 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+	tween(sc, 0.65, { Scale = 0.01 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+	task.wait(0.7)
+end
+CLOSERS.TVOff = function(gui, target, o)
+	local _, w, h = centerOf(gui, target)
+	local v = veil(target, Color3.new(1, 1, 1))
+	tween(v, 0.22, { BackgroundTransparency = 0.5 })
+	if centered(target) then
+		tween(target, 0.22, { Size = UDim2.fromOffset(w, 5) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		task.wait(0.24)
+		tween(v, 0.1, { BackgroundTransparency = 0 })
+		tween(target, 0.2, { Size = UDim2.fromOffset(0, 3) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		task.wait(0.22)
+	else
+		task.wait(0.3)
+	end
+end
+CLOSERS.Implode = function(gui, target, o)
+	local sc = scaleOf(target)
+	local base = sc.Scale
+	local pos = centerOf(gui, target)
+	tween(sc, 0.14, { Scale = base * 1.08 }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	task.wait(0.14)
+	tween(sc, 0.32, { Scale = 0.01 }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+	task.wait(0.3)
+	pcall(function()
+		target.Visible = false
+	end)
+	local ring = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = pos, Size = UDim2.fromOffset(10, 10), BackgroundTransparency = 1, ZIndex = 260 }, gui)
+	new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, ring)
+	local st = new("UIStroke", { Color = o.Color or Color3.fromRGB(255, 70, 80), Thickness = 6 }, ring)
+	tween(ring, 0.5, { Size = UDim2.fromOffset(420, 420) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	tween(st, 0.5, { Transparency = 1, Thickness = 1 })
+	pcall(RebelUI.Boom, gui, { Color = o.Color, Count = 26, Origin = pos })
+	task.wait(0.5)
+	ring:Destroy()
+end
+CLOSERS.Shatter = function(gui, target, o)
+	local _, w, h, cx, cy = centerOf(gui, target)
+	local COLS, ROWS = 8, 5
+	local color = o.Color or Color3.fromRGB(255, 70, 80)
+	local layer = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Active = false, ZIndex = 260 }, gui)
+	local x0, y0 = (cx or 0) - w / 2, (cy or 0) - h / 2
+	if not cx then
+		x0, y0 = 0, 0
+	end
+	local tw, th = w / COLS, h / ROWS
+	for r = 0, ROWS - 1 do
+		for c = 0, COLS - 1 do
+			local t = new("Frame", { Position = UDim2.fromOffset(x0 + c * tw, y0 + r * th), Size = UDim2.fromOffset(tw + 1, th + 1), BackgroundColor3 = Color3.fromRGB(16, 12, 16):Lerp(color, math.random() * 0.25), BorderSizePixel = 0, ZIndex = 261 }, layer)
+			new("UIStroke", { Color = color, Thickness = 1, Transparency = 0.6 }, t)
+			local ox, oy = (c + 0.5 - COLS / 2) / COLS, (r + 0.5 - ROWS / 2) / ROWS
+			task.delay(math.random() * 0.2, function()
+				if t.Parent then
+					local p = t.Position
+					tween(t, 0.8, { Position = UDim2.fromOffset(p.X.Offset + ox * 380 + math.random(-30, 30), p.Y.Offset + oy * 240 + 260 + math.random(0, 120)), Rotation = math.random(-260, 260), BackgroundTransparency = 1, Size = UDim2.fromOffset(tw * 0.4, th * 0.4) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+				end
+			end)
+		end
+	end
+	pcall(function()
+		target.Visible = false
+	end)
+	task.wait(1.05)
+	layer:Destroy()
+end
+CLOSERS.Custom = function(gui, target, o)
+	local src = o.Media
+	if src == nil or tostring(src) == "" then
+		return CLOSERS.Normal(gui, target, o)
+	end
+	local shown = RebelUI.PlayCover(gui, src, {
+		Time = o.MediaTime,
+		OnCovered = function()
+			pcall(function()
+				target.Visible = false
+			end)
+		end,
+	})
+	if not shown then
+		pcall(function()
+			target.Visible = true
+		end)
+		CLOSERS.Normal(gui, target, o)
+	end
+end
+-- the black hole: the world dims, an accretion disk (three counter-spinning rings) and an event horizon open over the panel,
+-- sparks spiral in along three orbits, the panel is stretched thin ("spaghettified"), spun and swallowed, then the hole
+-- collapses in a shockwave, flash and explosion.
+CLOSERS.BlackHole = function(gui, target, o)
+	local color = o.Color or Color3.fromRGB(255, 70, 80)
+	local hot = color:Lerp(Color3.fromRGB(255, 220, 160), 0.55)
+	local pos, w, h = centerOf(gui, target)
+	local sc = scaleOf(target)
+	local layer = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Active = false, ZIndex = 200 }, gui)
+	local alive = true
+	-- 1) the world dims
+	local dim = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 200 }, layer)
+	tween(dim, 0.6, { BackgroundTransparency = 0.45 })
+	-- 2) soft aura
+	local aura = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = pos, Size = UDim2.fromOffset(0, 0), BackgroundColor3 = color, BackgroundTransparency = 0.85, BorderSizePixel = 0, ZIndex = 201 }, layer)
+	new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, aura)
+	tween(aura, 0.7, { Size = UDim2.fromOffset(230, 230) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	-- 3) accretion disk: three rings spinning at different speeds
+	local rings = {}
+	for i, d in ipairs({ { 170, 7, color, 14 }, { 128, 5, hot, -22 }, { 92, 3, Color3.new(1, 1, 1), 34 } }) do
+		local r = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = pos, Size = UDim2.fromOffset(0, 0), BackgroundTransparency = 1, ZIndex = 202 }, layer)
+		new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, r)
+		local st = new("UIStroke", { Color = d[3], Thickness = d[2] }, r)
+		local g = new("UIGradient", { Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, d[3]), ColorSequenceKeypoint.new(0.5, Color3.new(1, 1, 1)), ColorSequenceKeypoint.new(1, d[3]) }) }, st)
+		rings[i] = { g = g, speed = d[4] }
+		task.delay(0.08 * i, function()
+			tween(r, 0.45, { Size = UDim2.fromOffset(d[1], d[1]) }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		end)
+	end
+	task.spawn(function()
+		local a = 0
+		while alive and layer.Parent do
+			a += 1
+			for _, r in ipairs(rings) do
+				r.g.Rotation = (a * r.speed * 0.35) % 360
+			end
+			task.wait(0.03)
+		end
+	end)
+	-- 4) the event horizon
+	local hole = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = pos, Size = UDim2.fromOffset(0, 0), BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0, ZIndex = 203 }, layer)
+	new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, hole)
+	new("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 1.5, Transparency = 0.35 }, hole)
+	tween(hole, 0.5, { Size = UDim2.fromOffset(78, 78) }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	-- 5) sparks spiral in along three orbits that spin in opposite directions
+	local size = 1000
+	pcall(function()
+		local s = gui.AbsoluteSize
+		if s.X > 0 then
+			size = math.max(s.X, s.Y) * 1.3
+		end
+	end)
+	local spins = {}
+	for k = 1, 3 do
+		local spin = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = pos, Size = UDim2.fromOffset(size, size), BackgroundTransparency = 1, ZIndex = 202 }, layer)
+		spins[k] = spin
+		for i = 1, 14 do
+			local dot = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5 + (math.random() - 0.5) * (0.5 + k * 0.28), 0.5 + (math.random() - 0.5) * (0.5 + k * 0.28)), Size = UDim2.fromOffset(math.random(3, 8), math.random(3, 8)), BackgroundColor3 = (i % 3 == 0) and Color3.new(1, 1, 1) or ((i % 3 == 1) and color or hot), BorderSizePixel = 0, ZIndex = 202 }, spin)
+			new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, dot)
+			task.delay(0.25 + i * 0.02 + k * 0.05, function()
+				if dot.Parent then
+					tween(dot, 0.6 + math.random() * 0.45, { Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(1, 1), BackgroundTransparency = 0.7 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+				end
+			end)
+		end
+		tween(spin, 1.3, { Rotation = (k % 2 == 0 and 1 or -1) * (300 + k * 120) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	end
+	task.wait(0.35)
+	-- 6) the panel is stretched thin, spun and pulled in
+	local darken = veil(target)
+	tween(darken, 0.8, { BackgroundTransparency = 0.35 })
+	pcall(function()
+		tween(target, 0.85, { Rotation = 260 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		if centered(target) then
+			tween(target, 0.85, { Position = pos, Size = UDim2.fromOffset(w * 0.14, h * 1.18) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		end
+	end)
+	tween(sc, 0.85, { Scale = 0.02 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	task.wait(0.85)
+	pcall(function()
+		target.Visible = false
+	end)
+	-- 7) the hole swells, then collapses in a shockwave
+	tween(hole, 0.12, { Size = UDim2.fromOffset(130, 130) }, Enum.EasingStyle.Quad)
+	task.wait(0.12)
+	tween(hole, 0.2, { Size = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+	tween(aura, 0.25, { Size = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	for _, rr in ipairs(layer:GetChildren()) do
+		pcall(function()
+			if rr.ZIndex == 202 and rr:FindFirstChildOfClass("UIStroke") then
+				tween(rr, 0.2, { Size = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+			end
+		end)
+	end
+	local wave = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = pos, Size = UDim2.fromOffset(20, 20), BackgroundTransparency = 1, ZIndex = 205 }, layer)
+	new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, wave)
+	local wst = new("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 8 }, wave)
+	tween(wave, 0.6, { Size = UDim2.fromOffset(size * 0.7, size * 0.7) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	tween(wst, 0.6, { Transparency = 1, Thickness = 1 })
+	local flash = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.3, BorderSizePixel = 0, ZIndex = 210 }, layer)
+	tween(flash, 0.4, { BackgroundTransparency = 1 })
+	tween(dim, 0.5, { BackgroundTransparency = 1 })
+	pcall(RebelUI.Boom, layer, { Color = color, Count = 36, Origin = pos })
+	task.wait(0.55)
+	alive = false
+	layer:Destroy()
+end
+-- UI.CloseEffect(gui, target, style, { Color, Media, MediaTime, Move }): plays one of RebelUI.CloseAnimations on `target`. Yields until it is over.
+function RebelUI.CloseEffect(gui, target, style, o)
+	o = o or {}
+	style = style or "Normal"
+	if style == "None" or o.ReduceMotion or not (gui and target and target.Parent) then
+		return
+	end
+	local fn = CLOSERS[style] or CLOSERS.Normal
+	local ok, err = pcall(fn, gui, target, o)
+	if not ok then
+		RebelUI._reportError("close animation " .. tostring(style), err)
+	end
+	pcall(function()
+		target.Visible = false
+	end)
+end
+-- old name, still works
+function RebelUI.BlackHole(gui, target, o)
+	return RebelUI.CloseEffect(gui, target, "BlackHole", o)
+end
+
+function Window:SetCloseAnimation(style, media)
+	if style ~= nil and not table.find(RebelUI.CloseAnimations, style) then
+		return self
+	end
+	if style ~= nil then
+		self.CloseAnimation = style
+	end
+	if media ~= nil then
+		self.CloseMedia = tostring(media) ~= "" and media or nil
+	end
+	RebelUI.Log("close animation:", self.CloseAnimation, self.CloseMedia)
+	return self
+end
+function Window:SetBoomStyle(style, image)
+	if style ~= nil and not table.find(RebelUI.BoomStyles, style) then
+		return self
+	end
+	if style ~= nil then
+		self.BoomStyle = style
+	end
+	if image ~= nil then
+		self.BoomImage = tostring(image) ~= "" and image or nil
+	end
+	return self
+end
+-- UI.PreviewClose(win, style, media): plays a close animation on a small test card so you can see it (the real panel stays)
+function RebelUI.PreviewClose(win, style, media)
+	if not win or not win.Gui or win._previewing then
+		return
+	end
+	win._previewing = true
+	task.spawn(function()
+		local card = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(240, 150), BackgroundColor3 = Color3.fromRGB(20, 12, 16), BorderSizePixel = 0, ZIndex = 120 }, win.Gui)
+		corner(card, 16)
+		new("UIStroke", { Color = win.Theme and win.Theme.Glow or Color3.fromRGB(255, 70, 80), Thickness = 2 }, card)
+		local t = label(card, "Preview", 18, Color3.new(1, 1, 1), true)
+		t.Size = UDim2.fromScale(1, 1)
+		t.TextXAlignment = Enum.TextXAlignment.Center
+		task.wait(0.5)
+		RebelUI.CloseEffect(win.Gui, card, style or win.CloseAnimation or "BlackHole", { Color = win.Theme and win.Theme.Glow, Media = media or win.CloseMedia, MediaTime = 2, Move = true })
+		card:Destroy()
+		win._previewing = false
+	end)
+end
+
+-- pickers you can drop into any tab (they are also in the Settings tab)
+function Tab:ClosePicker(o)
+	o = o or {}
+	local win = self.Win
+	if o.Section ~= false then
+		self:Section(o.Title or "Close animation")
+	end
+	self:Cycle({ Name = "When I press X", Description = "How the panel disappears", Options = RebelUI.CloseAnimations, Default = win.CloseAnimation or "BlackHole", Flag = "__closeanim", Callback = function(v)
+		win:SetCloseAnimation(v)
+		if v == "Custom" and not win.CloseMedia then
+			win:Notify({ Type = "info", Title = "Custom close", Text = "Paste a picture or video link in the box below." })
+		end
+	end })
+	self:Input({ Name = "Custom picture or video", Description = "Covers the whole screen. A link, a file name or an asset id (.mp4 / .webm = video)", Placeholder = "https://...", Flag = "__closemedia", NoLog = true, Callback = function(v)
+		win:SetCloseAnimation(nil, v)
+		if tostring(v or "") ~= "" then
+			win:SetCloseAnimation("Custom")
+		end
+	end })
+	self:Button({ Name = "Preview the close animation", Description = "Plays it on a small test card", NoLog = true, Callback = function()
+		RebelUI.PreviewClose(win)
+	end })
+end
+function Tab:BoomPicker(o)
+	o = o or {}
+	local win = self.Win
+	if o.Section ~= false then
+		self:Section(o.Title or "Explosion")
+	end
+	self:Cycle({ Name = "Explosion style", Description = "The effect when something booms", Options = RebelUI.BoomStyles, Default = win.BoomStyle or RebelUI.BoomStyle, Flag = "__boomstyle", Callback = function(v)
+		win:SetBoomStyle(v)
+	end })
+	self:Input({ Name = "Custom explosion picture", Description = "Used by the Custom style. A link, a file name or an asset id", Placeholder = "https://...", Flag = "__boomimage", NoLog = true, Callback = function(v)
+		win:SetBoomStyle(nil, v)
+		if tostring(v or "") ~= "" then
+			win:SetBoomStyle("Custom")
+		end
+	end })
+	self:Button({ Name = "Preview the explosion", NoLog = true, Callback = function()
+		win:Boom({ Shake = false })
+	end })
+end
+
+-- ---------- links: blue text, a line under it, a dark scan that sweeps across it, and a blue link icon on the left
+RebelUI.LinkColor = Color3.fromRGB(88, 166, 255)
+RebelUI._iconColor = RebelUI._iconColor or setmetatable({}, { __mode = "k" })
+-- RebelUI._linkFx(label, { Url }): makes a TextLabel look like a link (blue, underlined, with the scan). Click copies the url.
+function RebelUI._linkFx(lbl, o)
+	o = o or {}
+	lbl.TextColor3 = RebelUI.LinkColor
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	task.spawn(function()
+		task.wait(0.1)
+		if not lbl.Parent then
+			return
+		end
+		local w = 0
+		pcall(function()
+			w = math.min(lbl.TextBounds.X, lbl.AbsoluteSize.X)
+		end)
+		if not w or w <= 0 then
+			w = math.max(20, #tostring(lbl.Text) * (lbl.TextSize * 0.55))
+		end
+		local th = lbl.TextSize + 3
+		local line = new("Frame", { Name = "LinkLine", Position = UDim2.fromOffset(0, th), Size = UDim2.fromOffset(w, 1), BackgroundColor3 = RebelUI.LinkColor, BorderSizePixel = 0, ZIndex = (lbl.ZIndex or 1) + 1 }, lbl)
+		local host = new("Frame", { Name = "LinkScan", Position = UDim2.fromOffset(0, -1), Size = UDim2.fromOffset(w, th + 2), BackgroundTransparency = 1, ClipsDescendants = true, ZIndex = (lbl.ZIndex or 1) + 2 }, lbl)
+		local function bar(width, transp)
+			local b = new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0, -20, 0, 0), Size = UDim2.new(0, width, 1, 0), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = transp, BorderSizePixel = 0, ZIndex = (lbl.ZIndex or 1) + 2 }, host)
+			return b
+		end
+		local glowOuter, glowInner, core = bar(26, 0.9), bar(13, 0.78), bar(2, 0.1)
+		if not o.NoScan then
+			task.spawn(function()
+				local dur = math.max(0.9, w / 110)
+				while lbl.Parent and host.Parent do
+					for _, b in ipairs({ glowOuter, glowInner, core }) do
+						b.Position = UDim2.new(0, -20, 0, 0)
+						tween(b, dur, { Position = UDim2.new(0, w + 20, 0, 0) }, Enum.EasingStyle.Sine)
+					end
+					task.wait(dur + 1.6)
+				end
+			end)
+		end
+		lbl.Active = true
+	end)
+	local hit = new("TextButton", { Name = "LinkHit", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", ZIndex = (lbl.ZIndex or 1) + 5 }, lbl)
+	hit.Activated:Connect(function()
+		local url = o.Url or lbl.Text
+		local ok = type(setclipboard) == "function" and pcall(setclipboard, url)
+		if o.OnClick then
+			safe(o.OnClick, url, ok)
+		end
+	end)
+	hit.MouseEnter:Connect(function()
+		tween(lbl, 0.12, { TextColor3 = RebelUI.LinkColor:Lerp(Color3.new(1, 1, 1), 0.3) })
+	end)
+	hit.MouseLeave:Connect(function()
+		tween(lbl, 0.15, { TextColor3 = RebelUI.LinkColor })
+	end)
+	return hit
+end
+-- turns every http(s) link inside a text into blue underlined rich text
+function RebelUI._richLinks(text)
+	text = tostring(text or "")
+	if not text:find("https?://") then
+		return text, false
+	end
+	local hex = string.format("#%02X%02X%02X", math.floor(RebelUI.LinkColor.R * 255 + 0.5), math.floor(RebelUI.LinkColor.G * 255 + 0.5), math.floor(RebelUI.LinkColor.B * 255 + 0.5))
+	local out = text:gsub("(https?://[%w%-%._~:/%?#%[%]@!$&'%(%)%*%+,;=%%]+)", function(u)
+		return '<font color="' .. hex .. '"><u>' .. u .. "</u></font>"
+	end)
+	return out, true
+end
+
+function Tab:Link(o)
+	-- Url, Name (the text shown, default = the url), Description, Callback(url): a blue link row. Tap = copy.
+	if type(o) == "string" then
+		o = { Url = o }
+	end
+	o = o or {}
+	local win = self.Win
+	local hasDesc = o.Description ~= nil
+	local row = self:_row(hasDesc and 44 or 36)
+	local ico = new("ImageLabel", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), Size = UDim2.fromOffset(16, 16), BackgroundTransparency = 1, Image = asset(RebelUI.Icons.link), ScaleType = Enum.ScaleType.Fit, ImageColor3 = RebelUI.LinkColor }, row)
+	RebelUI._iconColor[ico] = RebelUI.LinkColor
+	RebelUI._iconFix(ico, RebelUI.Icons.link)
+	local txt = label(row, tostring(o.Name or o.Url or "link"), 12, RebelUI.LinkColor, true)
+	txt.Position = UDim2.fromOffset(38, hasDesc and 6 or 9)
+	txt.Size = UDim2.new(1, -52, 0, 16)
+	local shown = txt.Text
+	if hasDesc then
+		local d = label(row, o.Description, 8, C.Dim, false)
+		d.Position = UDim2.fromOffset(38, 28)
+		d.Size = UDim2.new(1, -52, 0, 11)
+	end
+	local obj = { Url = o.Url }
+	RebelUI._linkFx(txt, { Url = o.Url, OnClick = function(url, ok)
+		txt.Text = ok and "Link copied" or "Can't copy"
+		task.delay(1.1, function()
+			if txt.Parent then
+				txt.Text = shown
+			end
+		end)
+		if o.Callback then
+			safe(o.Callback, url)
+		end
+	end })
+	function obj:Get()
+		return obj.Url
+	end
+	function obj:Set(url)
+		obj.Url = url
+	end
+	return register(self, o, obj, "Link")
 end
 
 return RebelUI
