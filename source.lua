@@ -7510,6 +7510,527 @@ function RebelUI:KeyGate(o)
 		end
 	end
 
+	-- ====================================================================================================================
+	-- CARD layout (the default): a compact panel. Title + subtitle, key box, status line, a big Check Key button and a row of
+	-- small buttons (Get Key, Discord ...). Animated: the card slides up, every row pops in one after another, a light sweeps
+	-- over the top bar and the Check Key button, the key box glows when you type, a wrong key shakes the card, a right key
+	-- fills the bar green and booms. Layout = "Wide" or "Tall" brings the older big panels back.
+	-- ====================================================================================================================
+	if o.Layout == nil or o.Layout == "Card" then
+		local accent = pick(o.Accent, theme.Accent)
+		local CWd = math.min(vp.X * 0.92, o.FormWidth or (pcSetup and 440 or 400))
+		local P, SG = 22, 12 -- side padding, gap between rows
+		local IW = CWd - P * 2
+		local DARK, DARK2 = Color3.fromRGB(34, 34, 46), Color3.fromRGB(22, 22, 30)
+		local card = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 40), Size = UDim2.fromOffset(CWd, 320), BackgroundColor3 = Color3.fromRGB(7, 7, 11), BorderSizePixel = 0, Active = true, ClipsDescendants = true, ZIndex = 5 }, back)
+		corner(card, 20)
+		local cstroke = new("UIStroke", { Color = accent, Thickness = 1.5, Transparency = 0.55, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, card)
+		local scl = new("UIScale", { Scale = 0.86 }, card)
+		-- top bar with a light that sweeps across it
+		local bar = new("Frame", { Size = UDim2.new(1, 0, 0, 4), BackgroundColor3 = accent, BorderSizePixel = 0, ZIndex = 8 }, card)
+		local sweep = new("Frame", { Size = UDim2.new(0.3, 0, 1, 0), Position = UDim2.fromScale(-0.4, 0), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.45, BorderSizePixel = 0, ZIndex = 9 }, bar)
+		local result, savedKey = nil, nil
+		local busy, tries, remember = false, 0, o.Save ~= false
+		local sections, boxF, statusL, checkB, checkT, drawerOpen = {}, nil, nil, nil, nil, false
+		local box, kst, triesL
+		local drawerH, drawerTarget = 0, 0
+		local H = 320
+
+		local function addSection(h, build)
+			local f = new("Frame", { Size = UDim2.fromOffset(IW, h), BackgroundTransparency = 1, Visible = false, ZIndex = 6 }, card)
+			local s = { f = f, h = h }
+			sections[#sections + 1] = s
+			build(f, s)
+			return s
+		end
+		local function layout(animate)
+			local y = 22
+			for _, s in ipairs(sections) do
+				if s.h > 0 or s.keep then
+					s.y = y
+					if s.shown then
+						if animate then
+							tween(s.f, 0.25, { Position = UDim2.fromOffset(P, y) }, Enum.EasingStyle.Quad)
+						else
+							s.f.Position = UDim2.fromOffset(P, y)
+						end
+					end
+					y = y + s.h + (s.h > 0 and SG or 0)
+				end
+			end
+			H = y - SG + 22
+			if animate then
+				tween(card, 0.25, { Size = UDim2.fromOffset(CWd, H) }, Enum.EasingStyle.Quad)
+			else
+				card.Size = UDim2.fromOffset(CWd, H)
+			end
+			local fit = math.min(1, (vp.Y * 0.94) / H, (vp.X * 0.97) / CWd)
+			if scl.Scale ~= fit and not busy then
+				tween(scl, 0.25, { Scale = fit })
+			end
+		end
+		local function setStatus(text, color)
+			if not statusL then
+				return
+			end
+			statusL.Text = text
+			statusL.TextColor3 = color or C.Dim
+			if not o.ReduceMotion then
+				statusL.Position = UDim2.fromOffset(2, 7)
+				statusL.TextTransparency = 1
+				tween(statusL, 0.25, { Position = UDim2.fromOffset(2, 0), TextTransparency = 0 }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+			else
+				statusL.TextTransparency = 0
+			end
+		end
+		local function press(btn)
+			local sc = btn:FindFirstChildOfClass("UIScale") or new("UIScale", { Scale = 1 }, btn)
+			tween(sc, 0.07, { Scale = 0.95 })
+			task.delay(0.07, function()
+				tween(sc, 0.3, { Scale = 1 }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+			end)
+		end
+		local function hover(btn, base, over)
+			btn.MouseEnter:Connect(function()
+				tween(btn, 0.15, { BackgroundColor3 = over })
+			end)
+			btn.MouseLeave:Connect(function()
+				tween(btn, 0.2, { BackgroundColor3 = base })
+			end)
+		end
+
+		-- ---- header: logo, title, subtitle, close button
+		addSection(54, function(f)
+			local tx = 0
+			if o.Logo or o.Emoji then
+				tx = 58
+				local ring = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(25, 27), Size = UDim2.fromOffset(52, 52), BackgroundColor3 = accent, BackgroundTransparency = 0.8, BorderSizePixel = 0 }, f)
+				corner(ring, 14)
+				if not o.ReduceMotion then
+					task.spawn(function()
+						while gui.Parent and result == nil do
+							tween(ring, 1.1, { BackgroundTransparency = 0.93, Size = UDim2.fromOffset(60, 60) }, Enum.EasingStyle.Sine)
+							task.wait(1.1)
+							tween(ring, 1.1, { BackgroundTransparency = 0.78, Size = UDim2.fromOffset(52, 52) }, Enum.EasingStyle.Sine)
+							task.wait(1.1)
+						end
+					end)
+				end
+				if o.Logo then
+					local lg = new("ImageLabel", { Position = UDim2.fromOffset(1, 3), Size = UDim2.fromOffset(48, 48), BackgroundTransparency = 1, Image = asset(o.Logo), ScaleType = Enum.ScaleType.Fit, ZIndex = 7 }, f)
+					corner(lg, 10)
+					RebelUI.SetImage(lg, o.Logo)
+				else
+					local em = label(f, o.Emoji, 26, C.Text, true)
+					em.Position, em.Size = UDim2.fromOffset(1, 3), UDim2.fromOffset(48, 48)
+					em.TextXAlignment = Enum.TextXAlignment.Center
+					em.ZIndex = 7
+				end
+			end
+			local tl = label(f, tostring(o.Title or "KEY SYSTEM"), 24, C.White, true)
+			tl.Font = Enum.Font.GothamBlack
+			tl.Position = UDim2.fromOffset(tx, 2)
+			tl.Size = UDim2.new(1, -(tx + 46), 0, 30)
+			local sl = label(f, tostring(o.Subtitle or "Key System  -  enter your key to continue"), 11, Color3.fromRGB(135, 135, 152), false)
+			sl.Position = UDim2.fromOffset(tx, 32)
+			sl.Size = UDim2.new(1, -(tx + 46), 0, 18)
+		end)
+		local closeB = new("TextButton", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -16, 0, 22), Size = UDim2.fromOffset(34, 34), BackgroundColor3 = DARK, Text = "X", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = C.White, AutoButtonColor = false, ZIndex = 12 }, card)
+		corner(closeB, 10)
+		closeB.MouseEnter:Connect(function()
+			tween(closeB, 0.15, { BackgroundColor3 = Color3.fromRGB(190, 45, 55) })
+		end)
+		closeB.MouseLeave:Connect(function()
+			tween(closeB, 0.15, { BackgroundColor3 = DARK })
+		end)
+		closeB.Activated:Connect(function()
+			result = false
+		end)
+
+		-- ---- optional note
+		if o.Note then
+			local nc = pick(o.NoteColor, Color3.fromRGB(255, 190, 50))
+			local text = (o.NoteIcon and (o.NoteIcon .. "  ") or "") .. tostring(o.Note)
+			local perLine = math.max(14, math.floor(IW / 6.4))
+			local lines = math.ceil(#text / perLine) + select(2, text:gsub("\n", ""))
+			addSection(10 + lines * 13, function(f)
+				f.BackgroundTransparency = 0.88
+				f.BackgroundColor3 = nc
+				corner(f, 10)
+				local nb = new("Frame", { Size = UDim2.new(0, 3, 1, -10), Position = UDim2.fromOffset(6, 5), BackgroundColor3 = nc, BorderSizePixel = 0 }, f)
+				corner(nb, 2)
+				local nt = label(f, text, 10, C.Text, false)
+				nt.Position = UDim2.fromOffset(16, 0)
+				nt.Size = UDim2.new(1, -22, 1, 0)
+				nt.TextWrapped = true
+				nt.TextTruncate = Enum.TextTruncate.None
+			end)
+		end
+
+		-- ---- key box
+		addSection(52, function(f)
+			f.BackgroundTransparency = 0
+			f.BackgroundColor3 = DARK2
+			corner(f, 12)
+			kst = new("UIStroke", { Color = Color3.fromRGB(52, 52, 70), Thickness = 1.5 }, f)
+			local canPaste = type(getclipboard) == "function"
+			box = new("TextBox", { Position = UDim2.fromOffset(16, 0), Size = UDim2.new(1, canPaste and -92 or -32, 1, 0), BackgroundTransparency = 1, Text = "", PlaceholderText = "Paste your key here...", PlaceholderColor3 = Color3.fromRGB(105, 105, 124), TextColor3 = C.White, TextSize = 14, Font = Enum.Font.GothamMedium, ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 8 }, f)
+			if canPaste then
+				local pb = new("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -9, 0.5, 0), Size = UDim2.fromOffset(60, 32), BackgroundColor3 = DARK, Text = "Paste", Font = Enum.Font.GothamBold, TextSize = 11, TextColor3 = C.White, AutoButtonColor = false, ZIndex = 9 }, f)
+				corner(pb, 9)
+				hover(pb, DARK, Color3.fromRGB(52, 52, 70))
+				pb.Activated:Connect(function()
+					press(pb)
+					local okp, txt = pcall(getclipboard)
+					if okp and type(txt) == "string" and txt ~= "" then
+						box.Text = trim(txt)
+					end
+				end)
+			end
+			box.Focused:Connect(function()
+				tween(kst, 0.2, { Color = accent, Thickness = 2 })
+			end)
+			box.FocusLost:Connect(function(enter)
+				tween(kst, 0.2, { Color = Color3.fromRGB(52, 52, 70), Thickness = 1.5 })
+				if enter and RebelUI._cardSubmit then
+					RebelUI._cardSubmit()
+				end
+			end)
+			boxF = f
+		end)
+
+		-- ---- status line (red = wrong, green = copied / ok, grey = info)
+		addSection(20, function(f)
+			statusL = label(f, "", 12, C.Dim, true)
+			statusL.Position = UDim2.fromOffset(2, 0)
+			statusL.Size = UDim2.new(1, -4, 1, 0)
+			statusL.TextTruncate = Enum.TextTruncate.AtEnd
+		end)
+
+		-- ---- Check Key
+		addSection(50, function(f)
+			checkB = new("TextButton", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = accent, BackgroundTransparency = 0.3, Text = o.ButtonText or "Check Key", TextColor3 = C.White, Font = Enum.Font.GothamBold, TextSize = 16, AutoButtonColor = false, ClipsDescendants = true, ZIndex = 7 }, f)
+			corner(checkB, 12)
+			checkT = checkB
+			local shine = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(-0.3, 0.5), Size = UDim2.new(0, 36, 1.8, 0), Rotation = 20, BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.8, BorderSizePixel = 0, ZIndex = 8 }, checkB)
+			if not o.ReduceMotion then
+				task.spawn(function()
+					task.wait(1.2)
+					while gui.Parent and result == nil do
+						shine.Position = UDim2.fromScale(-0.2, 0.5)
+						tween(shine, 0.9, { Position = UDim2.fromScale(1.2, 0.5) }, Enum.EasingStyle.Quad)
+						task.wait(2.6)
+					end
+				end)
+			end
+		end)
+
+		-- ---- row of small buttons: Get Key first, then the ones you listed in Buttons
+		local provs = o.Providers or {}
+		local small = {}
+		if #provs > 0 then
+			small[#small + 1] = { Name = o.GetKeyText or "Get Key", Color = DARK, Provs = true }
+		end
+		for _, bd in ipairs(o.Buttons or {}) do
+			local c = pick(bd.Color, accent)
+			small[#small + 1] = { Name = bd.Name or "Button", Color = c:Lerp(Color3.new(0, 0, 0), 0.18), Link = bd.Link, Callback = bd.Callback, Copied = bd.CopiedText or (tostring(bd.Name) == "Discord" and "Discord invite copied!" or (tostring(bd.Name) .. " link copied!")) }
+		end
+		local drawerSec
+		local function closeDrawer()
+			if not drawerOpen then
+				return
+			end
+			drawerOpen = false
+			drawerSec.h = 0
+			tween(drawerSec.f, 0.25, { Size = UDim2.fromOffset(IW, 0) }, Enum.EasingStyle.Quad)
+			layout(true)
+		end
+		local perRow = 3
+		for r0 = 1, #small, perRow do
+			local n = math.min(perRow, #small - r0 + 1)
+			addSection(48, function(f)
+				local bw = (IW - SG * (n - 1)) / n
+				for i = 0, n - 1 do
+					local d = small[r0 + i]
+					local b = new("TextButton", { Position = UDim2.fromOffset(i * (bw + SG), 0), Size = UDim2.fromOffset(bw, 48), BackgroundColor3 = d.Color, Text = d.Name, Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = C.White, AutoButtonColor = false, ZIndex = 7 }, f)
+					corner(b, 12)
+					hover(b, d.Color, d.Color:Lerp(Color3.new(1, 1, 1), 0.12))
+					b.Activated:Connect(function()
+						press(b)
+						if d.Provs then
+							if #provs == 1 then
+								local pr = provs[1]
+								local link = type(pr) == "table" and (pr.Link or pr[2]) or nil
+								local okc = link and type(setclipboard) == "function" and pcall(setclipboard, link)
+								setStatus(okc and "Key link copied to clipboard!" or "No link set for the key.", okc and C.Green or C.Bad)
+							else
+								drawerOpen = not drawerOpen
+								drawerSec.h = drawerOpen and drawerTarget or 0
+								tween(drawerSec.f, 0.25, { Size = UDim2.fromOffset(IW, drawerSec.h) }, Enum.EasingStyle.Quad)
+								layout(true)
+							end
+							return
+						end
+						local okc = d.Link and type(setclipboard) == "function" and pcall(setclipboard, d.Link)
+						if d.Callback then
+							safe(d.Callback)
+						end
+						setStatus(okc and d.Copied or (d.Link and "Could not copy." or "..."), okc and C.Green or C.Bad)
+					end)
+				end
+			end)
+		end
+
+		-- ---- provider drawer (only when there is more than one get-key link)
+		drawerSec = addSection(0, function(f, s)
+			f.ClipsDescendants = true
+			s.keep = true
+			if #provs > 1 then
+				local y = 0
+				for i, pr in ipairs(provs) do
+					local pname = type(pr) == "table" and (pr.Name or pr[1]) or tostring(pr)
+					local link = type(pr) == "table" and (pr.Link or pr[2]) or nil
+					local info = providerInfo(pname) or {}
+					local img = (type(pr) == "table" and pr.Image) or info.Image
+					local pb = new("TextButton", { Position = UDim2.fromOffset(0, y), Size = UDim2.new(1, 0, 0, 46), BackgroundColor3 = DARK2, Text = "", AutoButtonColor = false, ZIndex = 7 }, f)
+					corner(pb, 12)
+					local pst = new("UIStroke", { Color = (type(pr) == "table" and pr.Color) or info.Color or accent, Thickness = 1.2, Transparency = 0.5 }, pb)
+					local fb = label(pb, tostring(pname), 13, C.White, true)
+					fb.Size = UDim2.fromScale(1, 1)
+					fb.TextXAlignment = Enum.TextXAlignment.Center
+					fb.ZIndex = 8
+					if img then
+						local im = new("ImageLabel", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, -16, 1, -12), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Fit, ImageTransparency = 1, ZIndex = 9 }, pb)
+						corner(im, 8)
+						RebelUI.SetImage(im, img, function(okI)
+							if okI and im.Parent then
+								tween(im, 0.3, { ImageTransparency = 0 })
+								fb.Visible = false
+							end
+						end)
+					end
+					hover(pb, DARK2, Color3.fromRGB(30, 30, 42))
+					pb.Activated:Connect(function()
+						press(pb)
+						local okc = link and type(setclipboard) == "function" and pcall(setclipboard, link)
+						setStatus(okc and (tostring(pname) .. " link copied to clipboard!") or ("No link set for " .. tostring(pname)), okc and C.Green or C.Bad)
+						if okc then
+							task.delay(0.5, closeDrawer)
+						end
+					end)
+					y = y + 46 + 8
+				end
+				drawerTarget = y - 8
+			end
+		end)
+		drawerSec.f.Size = UDim2.fromOffset(IW, 0)
+
+		-- ---- footer: remember tick, tries, tagline
+		addSection(o.Tagline and 40 or 22, function(f)
+			local rm = new("TextButton", { Size = UDim2.fromOffset(150, 22), BackgroundTransparency = 1, Text = "", AutoButtonColor = false, ZIndex = 7 }, f)
+			local rbox = new("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.fromOffset(18, 18), BackgroundColor3 = remember and accent or DARK, BorderSizePixel = 0 }, rm)
+			corner(rbox, 5)
+			local rtick = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(remember and 8 or 0, remember and 8 or 0), BackgroundColor3 = C.White, BorderSizePixel = 0 }, rbox)
+			corner(rtick, 3)
+			local rl = label(rm, "Remember my key", 11, Color3.fromRGB(135, 135, 152), false)
+			rl.Position = UDim2.fromOffset(26, 0)
+			rl.Size = UDim2.new(1, -26, 1, 0)
+			rm.Activated:Connect(function()
+				remember = not remember
+				tween(rbox, 0.15, { BackgroundColor3 = remember and accent or DARK })
+				tween(rtick, 0.2, { Size = remember and UDim2.fromOffset(8, 8) or UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+			end)
+			triesL = label(f, o.MaxTries and ("Tries 0/" .. o.MaxTries) or "", 11, Color3.fromRGB(135, 135, 152), false)
+			triesL.AnchorPoint = Vector2.new(1, 0)
+			triesL.Position = UDim2.new(1, 0, 0, 0)
+			triesL.Size = UDim2.fromOffset(110, 22)
+			triesL.TextXAlignment = Enum.TextXAlignment.Right
+			if o.Tagline then
+				local tg = label(f, tostring(o.Tagline), 10, Color3.fromRGB(95, 95, 112), false)
+				tg.Position = UDim2.fromOffset(0, 24)
+				tg.Size = UDim2.new(1, 0, 0, 14)
+				tg.TextXAlignment = Enum.TextXAlignment.Center
+			end
+		end)
+
+		-- ---- open: the card slides up, the rows pop in one after another
+		layout(false)
+		card.Size = UDim2.fromOffset(CWd, H)
+		local fit0 = math.min(1, (vp.Y * 0.94) / H, (vp.X * 0.97) / CWd)
+		tween(scl, 0.5, { Scale = fit0 }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		tween(card, 0.5, { Position = UDim2.fromScale(0.5, 0.5) }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		for i, s in ipairs(sections) do
+			task.delay(o.ReduceMotion and 0 or (0.12 + i * 0.07), function()
+				if not s.f.Parent then
+					return
+				end
+				s.shown = true
+				if o.ReduceMotion then
+					s.f.Position = UDim2.fromOffset(P, s.y)
+					s.f.Visible = true
+				else
+					s.f.Position = UDim2.fromOffset(P, s.y + 16)
+					s.f.Visible = true
+					tween(s.f, 0.4, { Position = UDim2.fromOffset(P, s.y) }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+				end
+			end)
+		end
+		if not o.ReduceMotion then
+			task.spawn(function()
+				task.wait(0.6)
+				while gui.Parent and result == nil do
+					sweep.Position = UDim2.fromScale(-0.4, 0)
+					tween(sweep, 1.4, { Position = UDim2.fromScale(1.1, 0) }, Enum.EasingStyle.Quad)
+					task.wait(3.4)
+				end
+			end)
+			task.spawn(function()
+				task.wait(0.9)
+				while gui.Parent and result == nil do
+					tween(cstroke, 1, { Transparency = 0.15 }, Enum.EasingStyle.Sine)
+					task.wait(1)
+					tween(cstroke, 1, { Transparency = 0.6 }, Enum.EasingStyle.Sine)
+					task.wait(1)
+				end
+			end)
+		end
+		if o.OpenBoom ~= false then
+			task.delay(0.35, function()
+				pcall(RebelUI.Boom, gui, { Color = accent, Count = 18 })
+			end)
+		end
+		-- the Check Key button is dimmer while the box is empty
+		box:GetPropertyChangedSignal("Text"):Connect(function()
+			if busy or result ~= nil then
+				return
+			end
+			tween(checkB, 0.2, { BackgroundTransparency = trim(box.Text) == "" and 0.3 or 0 })
+			if statusL.TextColor3 == C.Bad then
+				statusL.Text = ""
+			end
+		end)
+		hover(checkB, accent, accent:Lerp(Color3.new(1, 1, 1), 0.12))
+
+		-- ---- check the key
+		local dots
+		local function submit()
+			if busy or result ~= nil then
+				return
+			end
+			local k = trim(box.Text)
+			if k == "" then
+				setStatus("Paste your key first.", C.Bad)
+				if not o.ReduceMotion then
+					task.spawn(function()
+						for _, dx in ipairs({ -6, 6, -4, 4, 0 }) do
+							boxF.Position = UDim2.fromOffset(P + dx, boxF.Position.Y.Offset)
+							task.wait(0.035)
+						end
+					end)
+				end
+				return
+			end
+			busy = true
+			press(checkB)
+			setStatus("Checking...", C.Dim)
+			local dotsOn = true
+			task.spawn(function()
+				local n = 0
+				while dotsOn and gui.Parent do
+					checkT.Text = "Checking" .. string.rep(".", n % 4)
+					n += 1
+					task.wait(0.25)
+				end
+			end)
+			task.spawn(function()
+				local good, ttl = valid(k)
+				dotsOn = false
+				if good then
+					ttl = ttl or o.RememberFor
+					RebelUI.KeyExpires = ttl and (os.time() + ttl) or nil
+					busy = false
+					task.wait(0.3)
+					checkT.Text = "Unlocked"
+					setStatus((o.SuccessText or "Key accepted. Welcome!") .. (ttl and ("  Key valid for " .. fmtTime(ttl)) or ""), C.Green)
+					tween(checkB, 0.3, { BackgroundColor3 = C.Green, BackgroundTransparency = 0 })
+					tween(bar, 0.5, { BackgroundColor3 = C.Green })
+					tween(cstroke, 0.3, { Color = C.Green, Transparency = 0.2 })
+					tween(kst, 0.3, { Color = C.Green })
+					if remember and type(writefile) == "function" then
+						pcall(writefile, file, k .. "\n" .. (RebelUI.KeyExpires or "") .. (o.HwidBind and ("\n" .. (RebelUI.GetHWID() or "")) or ""))
+					end
+					savedKey = k
+					busy = true
+					if not o.ReduceMotion then
+						tween(scl, 0.15, { Scale = scl.Scale * 1.04 }, Enum.EasingStyle.Quad)
+					end
+					if o.Boom ~= false then
+						pcall(RebelUI.Boom, gui, { Color = theme.Glow, Count = 28, Text = o.BoomText })
+						task.wait(0.9)
+					else
+						task.wait(0.5)
+					end
+					result = true
+				else
+					tries += 1
+					busy = false
+					task.wait(0.3)
+					checkT.Text = o.ButtonText or "Check Key"
+					setStatus(o.MaxTries and ("That key is not right. (" .. tries .. "/" .. o.MaxTries .. ")") or "Invalid key. Try again.", C.Bad)
+					tween(kst, 0.1, { Color = C.Bad })
+					task.delay(0.8, function()
+						if kst.Parent then
+							tween(kst, 0.3, { Color = Color3.fromRGB(52, 52, 70) })
+						end
+					end)
+					if o.MaxTries then
+						triesL.Text = "Tries " .. tries .. "/" .. o.MaxTries
+					end
+					if not o.ReduceMotion then
+						for _, dx in ipairs({ -9, 9, -6, 6, 0 }) do
+							card.Position = UDim2.new(0.5, dx, 0.5, 0)
+							task.wait(0.04)
+						end
+					end
+					if o.MaxTries and tries >= o.MaxTries then
+						task.wait(0.8)
+						result = false
+					elseif (o.Cooldown or 0) > 0 then
+						busy = true
+						for s = math.ceil(o.Cooldown), 1, -1 do
+							checkT.Text = "Wait " .. s .. "s"
+							task.wait(1)
+						end
+						checkT.Text = o.ButtonText or "Check Key"
+						busy = false
+					end
+				end
+			end)
+		end
+		RebelUI._cardSubmit = submit
+		checkB.Activated:Connect(submit)
+		local waited = 0
+		while result == nil do
+			task.wait(0.1)
+			waited += 0.1
+			if o.Timeout and waited >= o.Timeout then
+				result = false
+			end
+		end
+		RebelUI._cardSubmit = nil
+		if o.Blur ~= false then
+			RebelUI.Blur(0, 0.4)
+		end
+		tween(scl, 0.2, { Scale = 0.7 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		tween(back, 0.2, { BackgroundTransparency = 1 })
+		task.wait(0.2)
+		gui:Destroy()
+		if result then
+			return true, savedKey, RebelUI.KeyExpires
+		end
+		return false
+	end
+
 	local PAD, GAP = 14, 8
 	local CW
 	if wide then
