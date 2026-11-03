@@ -1,6 +1,10 @@
 # RebelUI changelog (version stays 1.0.0)
 
 ## Latest
+- Round 4: 11 elements (Vector, Level, BarChart, Stack, ButtonRow, Tiles, Status, KeyValue, Callout, Tasks, ColorInput), 17 window tools (GoTo, ListTabs, OnOpen, OnClose, Every, CycleTheme, RandomTheme, Fireworks, Sparkle, RippleAt, Achievement, ShowShortcuts, CopyReport, SetFont, SetTextScale, Konami, IdleDim) and helpers `UI:SelfTest()`, `UI:Info()`, `UI.Debounce`, `UI.Throttle`, `UI.FormatNumber`, `UI.Short`.
+- Round 3: 12 tab elements (TriState, ToggleGrid, Socials, Until, Poll, Leaderboard, TextArea, Heading, Gallery, FAQ, Changelog, Avatars), 11 screen looks (Snow, Matrix, Aurora, Vignette, Scanlines, Flash, Pulse, Shine, Wiggle, Welcome, CountDown) and 7 tools (Prompt, Choose, Confirm, Loading, Hotkey, Once, PlaySound).
+- Round 2: 20 new tab elements (Radio, CheckList, Swatches, Badge, Profile, Spacer, Quote, Counter, Meter, Compare, Banner, Marquee, Stopwatch, Clock, Spoiler, TagInput, Pagination, Copy, Kbd, Tip) and 10 window tools (Announce, ShowChangelog, Tour, AskRating, Lock, SetAutoHide, GetFlag, SetFlag, Highlight, Rain). The Example has a new "More" tab.
+- New cards: `Tab:Groupbox`, `Tab:Tabbox`, `Tab:Accordion` (like Linoria / Obsidian groupboxes and tabboxes).
 - Repo moved to RebelUI/Library. Removed the Discord embed file and the black icons folder.
 - Close animations: Normal, BlackHole (rebuilt), Shatter, TVOff, Spin, Implode, Custom (full-screen picture or video), None. `Win:SetCloseAnimation`, `Tab:ClosePicker`, `UI.PreviewClose`, `UI.PlayCover`.
 - Explosion styles: Classic, Confetti, Shockwave, Sparks, Diamonds, Custom (your picture), None. `Win:SetBoomStyle`, `Tab:BoomPicker`. No "LET'S GO" / "BOOM" text by default.
