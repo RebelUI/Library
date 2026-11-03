@@ -12,7 +12,7 @@
 -- To pin the library to one exact version (so a later push to the repo can never change what runs), replace "main" with a
 -- commit id from GitHub (the long code next to a commit), e.g. REF = "3f2a9c1d...". "main" always loads the newest file.
 local REF = "main"
-local URL = "https://raw.githubusercontent.com/rizqadeeb38-dev/Rebelwar_UI/" .. REF .. "/source.lua"
+local URL = "https://raw.githubusercontent.com/RebelUI/Library/" .. REF .. "/source.lua"
 
 -- shows a message on screen (phones can't see the console) and in the console
 local function problem(msg)
@@ -43,7 +43,7 @@ end
 
 -- normal text everywhere (some phones draw fancy letters as boxes). Optional: UI.FancyText = "Bold" turns on styled letters.
 
--- Your own icon copies (from the "black icons" folder, uploaded to Roblox): paste their asset ids here and they replace the built-in ones.
+-- Your own icon copies (upload your PNGs to Roblox): paste their asset ids here and they replace the built-in ones.
 -- Leave a name out (or 0) to use the built-in icon (plain black by default; set UI.IconMode = "White" or "Glow" for the other looks).
 local WHITE = {
 	-- key = 0, padlock = 0, openpadlock = 0, notification = 0, wrench = 0, elements = 0, star = 0, right = 0, down = 0,
@@ -127,7 +127,6 @@ local function keyGateOptions(save)
 		RememberFor = 24 * 60 * 60, -- a remembered key lasts 24 hours, then the panel comes back (nil = never expires)
 		Save = save, -- true remembers the key on this device
 		Boom = true, -- explosion effect when the key is right
-		BoomText = "LET'S GO!",
 		Theme = "Red",
 	}
 end
@@ -286,9 +285,9 @@ local function buildElements(Elements)
 	Elements:List({ Items = { "Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta" }, Multi = true, Search = true, Callback = function(v) print("picked", #v) end })
 	Elements:Table({ Columns = { "Player", "Kills", "Deaths" }, Rows = { { "Ava", 12, 3 }, { "Ben", 7, 9 }, { "Cy", 21, 2 }, { "Dee", 4, 4 }, { "Eli", 15, 6 } }, PageSize = 4 })
 	Elements:Section("New: images with effects, boom, hold, undo, mini")
-	Elements:Image({ Image = LOGO, Height = 96, Circle = true, Effect = "Rainbow", Caption = "Effect = Rainbow (also Pulse, Float, Glow, Spin, Shimmer)", OnClick = function() Win:Boom({ Text = "BOOM" }) end })
+	Elements:Image({ Image = LOGO, Height = 96, Circle = true, Effect = "Rainbow", Caption = "Effect = Rainbow (also Pulse, Float, Glow, Spin, Shimmer)", OnClick = function() Win:Boom({}) end })
 	Elements:Image({ Image = BANNER, Height = 90, Crop = true, Effect = "Shimmer" })
-	Elements:Button({ Name = "BOOM!", Description = "The explosion effect: flash, rings and sparks", Callback = function() Win:Boom({ Text = "BOOM" }) end })
+	Elements:Button({ Name = "Explosion", Description = "The explosion effect (pick the style in Media or Settings)", Callback = function() Win:Boom({}) end })
 	Elements:HoldButton({ Name = "Hold to confirm (1 second)", Seconds = 1, Callback = function() Win:Notify({ Title = "Confirmed", Type = "success" }) end })
 	Elements:Button({ Name = "Toast with Undo", Callback = function() Win:NotifyUndo({ Title = "Setting changed", Text = "Tap Undo within 5 seconds.", OnUndo = function() Win:Notify({ Title = "Undone", Type = "success" }) end }) end })
 	local miniToggle = Elements:Toggle({ Name = "Mini pill target" })
@@ -520,7 +519,7 @@ local lockedT = Elements:Toggle({ Name = "Locked feature", Description = "Tap Un
 	Elements:Button({ Name = "Add 1 to the score", Callback = function()
 		score:Set(score:Get() + 1)
 	end })
-	Elements:Feed({ Title = "News from GitHub", Url = "https://raw.githubusercontent.com/rizqadeeb38-dev/Rebelwar_UI/main/README.md", Text = "Could not load the news.", MaxChars = 300 })
+	Elements:Feed({ Title = "News from GitHub", Url = "https://raw.githubusercontent.com/RebelUI/Library/main/README.md", Text = "Could not load the news.", MaxChars = 300 })
 end
 
 -- a folder in the tab list: tap the arrow (right.png turns down) and its tabs slide down. Main:CreateTab({...}) puts tabs inside.
@@ -532,6 +531,8 @@ local Media = Main:CreateTab({ Name = "Media", Icon = UI.Icons.test, Title = "ME
 	t:Section("Check an image id")
 	t:AssetPicker({ Name = "Image id or link" })
 	t:LoadingPicker({ File = PREFS_FILE, Base = { Title = "Rebelwar", Subtitle = "made by prorizz196", Logo = LOGO, Banner = BANNER, Video = "https://raw.githubusercontent.com/rizqadeeb38-dev/Rebelwar_UI/assets/Logo-loading.png.mp4", Theme = "Red" } })
+	t:ClosePicker({ Title = "When you press X" })
+	t:BoomPicker({ Title = "Explosion style" })
 	t:Section("Effects")
 	t:Dropdown({ Name = "Page animation", Options = UI.PageAnimations, Default = "Slide up", Callback = function(v)
 		Win:SetPageAnimation(v)
@@ -574,6 +575,7 @@ Discord:Paragraph({
 	Title = "📚 REBELUI & RESOURCES",
 	Text = "#examples: the tutorial source.lua (copy it and change it)\n#documentation: every document we have\nAsk questions, share your scripts, get help.",
 })
+Discord:Link({ Url = DISCORD, Name = DISCORD, Description = "Tap the blue link to copy it" })
 Discord:Button({
 	Name = "Copy the official Discord invite",
 	Description = "Tutorials, documentation, updates and help",
@@ -594,7 +596,7 @@ stage("Ready!", 1)
 ready = true
 Load:Finish() -- fades the loading screen out
 Win:Toggle(true) -- the panel pops open
-Win:Boom({ Text = "LET'S GO!" })
+Win:Boom({})
 Win:Notify({ Title = "Welcome, " .. lp.DisplayName, Text = "Tap the top bar (or press RightShift) to hide or show the panel.", Duration = 5 })
 end
 
