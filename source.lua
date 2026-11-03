@@ -1832,7 +1832,7 @@ function RebelUI:CreateWindow(o)
 			end)
 			return
 		end
-		win:Destroy()
+		win:Close()
 	end)
 	expBtn.MouseButton1Click:Connect(function()
 		win:Maximize()
@@ -2078,6 +2078,22 @@ function Window:_scramble(lbl, text)
 		if self._scrTok == mine then
 			lbl.Text = text
 		end
+	end)
+end
+
+-- Win:Close(): what the X button does. Plays the black hole animation, then Destroy(). Win.CloseAnimation = "None" closes at once.
+function Window:Close()
+	if self._closing or self._dead then
+		return
+	end
+	if self.CloseAnimation == "None" or self.ReduceMotion or not self.Main or not self.Gui or not RebelUI.BlackHole then
+		self:Destroy()
+		return
+	end
+	self._closing = true
+	task.spawn(function()
+		pcall(RebelUI.BlackHole, self.Gui, self.Main, { Color = self.Theme and self.Theme.Glow, Move = true })
+		self:Destroy()
 	end)
 end
 
@@ -7530,6 +7546,7 @@ function RebelUI:KeyGate(o)
 		local bar = new("Frame", { Size = UDim2.new(1, 0, 0, 4), BackgroundColor3 = accent, BorderSizePixel = 0, ZIndex = 8 }, card)
 		local sweep = new("Frame", { Size = UDim2.new(0.3, 0, 1, 0), Position = UDim2.fromScale(-0.4, 0), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.45, BorderSizePixel = 0, ZIndex = 9 }, bar)
 		local result, savedKey = nil, nil
+		local closedByX = false
 		local busy, tries, remember = false, 0, o.Save ~= false
 		local sections, boxF, statusL, checkB, checkT, drawerOpen = {}, nil, nil, nil, nil, false
 		local box, kst, triesL
@@ -7644,6 +7661,7 @@ function RebelUI:KeyGate(o)
 			tween(closeB, 0.15, { BackgroundColor3 = DARK })
 		end)
 		closeB.Activated:Connect(function()
+			closedByX = true
 			result = false
 		end)
 
@@ -8019,7 +8037,10 @@ function RebelUI:KeyGate(o)
 		end
 		RebelUI._cardSubmit = nil
 		if o.Blur ~= false then
-			RebelUI.Blur(0, 0.4)
+			RebelUI.Blur(0, 0.6)
+		end
+		if closedByX and o.CloseAnimation == "BlackHole" and not o.ReduceMotion then
+			RebelUI.BlackHole(gui, card, { Color = accent, Move = true })
 		end
 		tween(scl, 0.2, { Scale = 0.7 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 		tween(back, 0.2, { BackgroundTransparency = 1 })
@@ -8430,6 +8451,7 @@ function RebelUI:KeyGate(o)
 	end
 
 	local busy, tries = false, 0
+	local closedByX = false
 	local spinConn
 	local function submit()
 		if busy or result ~= nil then
@@ -8508,6 +8530,7 @@ function RebelUI:KeyGate(o)
 		end
 	end)
 	closeB.Activated:Connect(function()
+		closedByX = true
 		result = false
 	end)
 	local waited = 0
@@ -8522,7 +8545,10 @@ function RebelUI:KeyGate(o)
 		spinConn:Disconnect()
 	end
 	if o.Blur ~= false then
-		RebelUI.Blur(0, 0.4)
+		RebelUI.Blur(0, 0.6)
+	end
+	if closedByX and o.CloseAnimation == "BlackHole" and not o.ReduceMotion then
+		RebelUI.BlackHole(gui, card, { Color = theme.Glow, Move = true })
 	end
 	tween(scl, 0.2, { Scale = 0.7 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 	tween(back, 0.2, { BackgroundTransparency = 1 })
@@ -11245,6 +11271,86 @@ function RebelUI._imageEffect(img, effect, theme)
 		local sh = new("Frame", { Size = UDim2.new(0.25, 0, 1.4, 0), Position = UDim2.new(-0.4, 0, -0.2, 0), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.82, BorderSizePixel = 0, Rotation = 18, ZIndex = (img.ZIndex or 1) + 1 }, img)
 		loop(sh, { Position = UDim2.new(1.2, 0, -0.2, 0) }, 1.8, Enum.EasingStyle.Quad)
 	end
+end
+
+-- RebelUI.BlackHole(gui, target, { Color, Move, ReduceMotion }): the close animation. A black hole with a glowing, spinning ring opens
+-- over `target`, sparks spiral into it, `target` spins and shrinks into the hole, the hole collapses with a flash and a boom, and it is gone.
+-- Yields for about 1.6 seconds. Used by the X buttons (Win.CloseAnimation = "None" or KeyGate({ CloseAnimation = "None" }) turns it off).
+function RebelUI.BlackHole(gui, target, o)
+	o = o or {}
+	local color = o.Color or Color3.fromRGB(255, 70, 80)
+	if o.ReduceMotion or not (gui and target and target.Parent) then
+		return
+	end
+	local okPos, cx, cy = pcall(function()
+		local ap, as, gp = target.AbsolutePosition, target.AbsoluteSize, gui.AbsolutePosition
+		if as.X <= 0 or as.Y <= 0 then
+			error("no size")
+		end
+		return ap.X + as.X / 2 - gp.X, ap.Y + as.Y / 2 - gp.Y
+	end)
+	local pos = okPos and UDim2.fromOffset(cx, cy) or UDim2.fromScale(0.5, 0.5)
+	local sc = target:FindFirstChildOfClass("UIScale") or new("UIScale", { Scale = 1 }, target)
+	local layer = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Active = false, ZIndex = 200 }, gui)
+	-- soft glow + the hole itself
+	local glow = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = pos, Size = UDim2.fromOffset(0, 0), BackgroundColor3 = color, BackgroundTransparency = 0.82, BorderSizePixel = 0, ZIndex = 201 }, layer)
+	new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, glow)
+	local hole = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = pos, Size = UDim2.fromOffset(0, 0), BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0, ZIndex = 203 }, layer)
+	new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, hole)
+	local ring = new("UIStroke", { Color = color, Thickness = 5 }, hole)
+	local rg = new("UIGradient", { Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, color), ColorSequenceKeypoint.new(0.5, Color3.new(1, 1, 1)), ColorSequenceKeypoint.new(1, color) }) }, ring)
+	local alive = true
+	task.spawn(function()
+		local r = 0
+		while alive and layer.Parent do
+			r = (r + 18) % 360
+			rg.Rotation = r
+			task.wait(0.03)
+		end
+	end)
+	tween(hole, 0.4, { Size = UDim2.fromOffset(84, 84) }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	tween(glow, 0.5, { Size = UDim2.fromOffset(150, 150) }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	-- sparks that spiral into the hole (they live in a frame that spins)
+	local size = 1000
+	pcall(function()
+		local s = gui.AbsoluteSize
+		if s.X > 0 then
+			size = math.max(s.X, s.Y) * 1.3
+		end
+	end)
+	local spin = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = pos, Size = UDim2.fromOffset(size, size), BackgroundTransparency = 1, ZIndex = 202 }, layer)
+	for i = 1, 30 do
+		local dot = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(math.random(), math.random()), Size = UDim2.fromOffset(math.random(4, 9), math.random(4, 9)), BackgroundColor3 = (i % 3 == 0) and Color3.new(1, 1, 1) or color, BorderSizePixel = 0, ZIndex = 202 }, spin)
+		new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, dot)
+		task.delay(i * 0.012, function()
+			tween(dot, 0.55 + math.random() * 0.4, { Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(1, 1), BackgroundTransparency = 0.6 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		end)
+	end
+	tween(spin, 1.1, { Rotation = -420 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	task.wait(0.25)
+	-- the panel spins and is pulled into the hole
+	pcall(function()
+		tween(target, 0.8, { Rotation = 300 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		if o.Move and target.AnchorPoint == Vector2.new(0.5, 0.5) then
+			tween(target, 0.8, { Position = pos }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		end
+	end)
+	tween(sc, 0.8, { Scale = 0.02 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	task.wait(0.8)
+	pcall(function()
+		target.Visible = false
+	end)
+	-- the hole swells, then collapses with a flash and a boom
+	tween(hole, 0.12, { Size = UDim2.fromOffset(120, 120) }, Enum.EasingStyle.Quad)
+	task.wait(0.12)
+	tween(hole, 0.18, { Size = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+	tween(glow, 0.25, { Size = UDim2.fromOffset(0, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	local flash = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.35, BorderSizePixel = 0, ZIndex = 210 }, layer)
+	tween(flash, 0.35, { BackgroundTransparency = 1 })
+	pcall(RebelUI.Boom, layer, { Color = color, Count = 36 })
+	task.wait(0.4)
+	alive = false
+	layer:Destroy()
 end
 
 function RebelUI.Boom(parent, o)
