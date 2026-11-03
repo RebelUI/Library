@@ -2536,6 +2536,157 @@ stars:Set(5)                           -- tap the same star again to clear it
 
 Both are saved with your flags and written to the Summary tab.
 
+## Round 4: data, polish and developer tools
+
+**Tab elements**
+
+| Method | What it makes |
+|---|---|
+| `Tab:Vector({ Name, Default = { 0, 0, 0 }, Callback(Vector3) })` | Three number boxes. `obj:Get()` is a Vector3 |
+| `Tab:Level({ Name, Level, XP, Next, OnLevelUp })` | A level badge with an xp bar. `obj:AddXP(n)` |
+| `Tab:BarChart({ Name, Data = { { "Mon", 3 } } })` | Vertical bars. `obj:SetData(data)` |
+| `Tab:Stack({ Name, Parts = { { "Wins", 6 }, { "Losses", 4 } } })` | One bar split into colored parts |
+| `Tab:ButtonRow({ { Name, Callback, Color } })` | Several buttons side by side |
+| `Tab:Tiles({ { Name, Icon, Callback } }, { Columns = 3 })` | A grid of big tap tiles |
+| `Tab:Status({ Name, State, Text })` | A colored dot (`online`, `busy`, `warn`, `offline`). `obj:Set(state, text)` |
+| `Tab:KeyValue({ Name, Rows = { { "Ping", "40" } } })` | An info card. `obj:Set(key, value)` |
+| `Tab:Callout({ Title, Text, Color })` | A colored note card |
+| `Tab:Tasks({ Name, Items, Callback(done, total) })` | A to-do list with a progress bar |
+| `Tab:ColorInput({ Name, Default = "#E94B35", Callback(Color3) })` | Type a hex color, see it |
+
+**Window tools**
+
+```lua
+Win:GoTo("Settings")                 -- open a tab by name or number. Win:ListTabs() gives the names
+Win:OnOpen(function() end); Win:OnClose(function() end)   -- events when the panel opens or hides
+local stop = Win:Every(1, function() end); stop()           -- a loop that ends with the panel
+Win:CycleTheme(); Win:RandomTheme()
+Win:Fireworks(5); Win:Sparkle(element); Win:RippleAt(x, y)
+Win:Achievement({ Title = "Explorer", Text = "You found it", Icon = 123456 })
+Win:ShowShortcuts({ { "Ctrl+K", "Command palette" } })
+Win:CopyReport()                     -- copies version, executor, tabs and last errors, so a player can send it to you
+Win:SetFont("Ubuntu")                -- Gotham, Ubuntu, SourceSans or Arial (changes what is on screen now)
+Win:SetTextScale(1.2)                -- 0.8 to 1.6: bigger or smaller text for the whole panel
+Win:Konami(function() end)           -- up up down down left right left right B A
+Win:IdleDim(10, 40)                  -- after 10 seconds idle the panel becomes 40% solid. Win:IdleDim(nil) turns it off
+```
+
+**Library helpers**
+
+```lua
+UI:SelfTest()                        -- builds a hidden test panel and prints what works on this executor
+UI:Info()                            -- how many elements and tools this version has
+UI.Debounce(fn, 0.5)  UI.Throttle(fn, 1)
+UI.FormatNumber(1234567)             -- "1,234,567"
+UI.Short(1500000)                    -- "1.5M"
+```
+
+## Round 3: looks and more tools
+
+**Tab elements**
+
+| Method | What it makes |
+|---|---|
+| `Tab:TriState({ Name, Default, Callback })` | A button that cycles OFF, ON, AUTO |
+| `Tab:ToggleGrid({ Name, Items, Columns, Default, Callback(name, on) })` | Small toggle chips in a grid |
+| `Tab:Socials({ { Name, Url, Color }, ... })` | A row of buttons that copy a link |
+| `Tab:Until({ Name, Time = os.time() + 3600, Callback })` | A live countdown to a moment |
+| `Tab:Poll({ Question, Options, Callback })` | Tap to vote, bars show the share. `obj:SetVotes({ A = 3 })` |
+| `Tab:Leaderboard({ Name, Rows = { { "Ava", 12 } }, Max })` | Ranked list with gold, silver and bronze. `obj:SetRows(rows)` |
+| `Tab:TextArea({ Name, Lines, Default, Callback })` | A big multi-line text box |
+| `Tab:Heading("Title")` | A big title with an accent line |
+| `Tab:Gallery({ Images, Height, Auto })` | A picture slider with arrows and dots |
+| `Tab:FAQ({ { "Question?", "Answer." } })` | Tap a question to open its answer |
+| `Tab:Changelog({ { Version, Items } })` | A version history card |
+| `Tab:Avatars({ UserIds })` | A row of player headshots |
+
+**Screen looks** (turn off with `false`; they stop by themselves with Reduce motion on)
+
+```lua
+Win:Snow(true)            -- or Win:Snow(true, { Image = 123456, Color = Color3.new(1, 0.5, 0.5) })
+Win:Matrix(true)          -- falling code letters and numbers
+Win:Aurora(true)          -- a soft moving color glow behind the panel
+Win:Vignette(true)        -- dark screen edges
+Win:Scanlines(true)       -- a thin light line sweeps down the screen
+Win:Flash()               -- a quick screen flash
+Win:Pulse(element)        -- an element's outline breathes 3 times
+Win:Shine(element)        -- a light sweeps across an element
+Win:Wiggle(element)       -- shakes an element, good for "wrong"
+Win:Welcome({ Text = "Welcome back", Sub = "RebelUI" })  -- a greeting that types itself
+Win:CountDown(3, function() print("go") end)             -- big 3, 2, 1 on the screen
+```
+
+**Tools**
+
+```lua
+Win:Prompt({ Title = "Name?", Callback = function(text) end })        -- a pop-up with a text box
+Win:Choose({ Title = "Pick", Options = { "A", "B" }, Callback = function(opt) end })
+Win:Confirm("Delete it?", function() end, function() end)
+local ld = Win:Loading("Please wait"); ld:SetText("Almost"); ld:Close()
+local off = Win:Hotkey(Enum.KeyCode.F, function() end); off()          -- off() removes it
+Win:Once("tour", function() end)   -- runs only the first time on this device
+Win:PlaySound(123456, 0.5)
+```
+
+## Round 2: 30 more things
+
+**Tab elements**
+
+| Method | What it makes |
+|---|---|
+| `Tab:Radio({ Name, Options, Default, Callback })` | One choice from a list, one per line |
+| `Tab:CheckList({ Name, Items, Default = { A = true }, Callback })` | Several checkboxes in one card. `obj:Get()` gives `{ A = true, B = false }` |
+| `Tab:Swatches({ Name, Colors, Default, Callback(color, index) })` | Tap a color circle |
+| `Tab:Badge({ Text, Color })` | A small colored pill. `Color` can be a Color3 or `"Green"`, `"Yellow"`, `"Bad"` |
+| `Tab:Profile({ Name, Subtitle, UserId })` | A card with a headshot (you by default) |
+| `Tab:Spacer(height)` | Empty space |
+| `Tab:Quote({ Text, By })` | A quote with an accent bar |
+| `Tab:Counter({ Name, Value, Prefix, Suffix, Decimals })` | A big number that counts up smoothly. `obj:Set(n)`, `obj:Add(n)` |
+| `Tab:Meter({ Name, Segments, Value })` | A segmented bar like a battery |
+| `Tab:Compare({ Name, A = { Name, Value }, B = { Name, Value } })` | A tug-of-war bar. `obj:Set(a, b)` |
+| `Tab:Banner({ Title, Text, Image, Color })` | A wide news card |
+| `Tab:Marquee({ Text, Speed })` | Scrolling ticker text |
+| `Tab:Stopwatch({ Name })` | Start / Stop / Reset. `obj:Get()` is the seconds |
+| `Tab:Clock({ Name, Format })` | A live clock (`os.date` format) |
+| `Tab:Spoiler({ Name, Text })` | Text hidden until you tap it |
+| `Tab:TagInput({ Name, Max, Callback(list) })` | Type a word, press Enter, it becomes a tag. Tap a tag to remove it |
+| `Tab:Pagination({ Name, Pages, Callback(page) })` | `< 2 / 5 >` buttons |
+| `Tab:Copy({ Name, Text })` | A row that copies its text when tapped |
+| `Tab:Kbd({ Name, Keys = { "Ctrl", "K" } })` | Key caps for a shortcut hint |
+| `Tab:Tip({ Text, Type })` | A hint line with a colored dot (`"success"`, `"warn"`) |
+
+**Window tools**
+
+```lua
+Win:Announce({ Text = "Update is live!", Type = "success", Duration = 6 }) -- a banner from the top, tap to close
+Win:ShowChangelog({ Version = "1.0.0", Items = { "New thing", "Fixed thing" }, Once = true }) -- Once = only the first time per version
+Win:Tour({ { Title = "Welcome", Text = "..." }, { Title = "Tabs", Text = "..." } }, { Done = function() end })
+Win:AskRating({ Callback = function(v) print(v) end })           -- 3 = love it, 2 = ok, 1 = needs work
+local lock = Win:Lock({ Pin = "1234", OnUnlock = function() end }) -- a lock screen; lock:Unlock() opens it from code
+Win:SetAutoHide(60)                                              -- hide the panel after 60 seconds without touching it
+Win:GetFlag("farm") ; Win:SetFlag("farm", true)                  -- read or set any element that has a Flag
+Win:Highlight(element)                                           -- flashes an outline around an element
+Win:Rain({ Image = 123456, Count = 40 })                         -- things fall from the top of the screen
+```
+
+## Groupbox, Tabbox and Accordion
+
+Cards that hold other elements. Each one takes every element method (`:Toggle`, `:Slider`, `:Button` ...).
+
+```lua
+local g = Tab:Groupbox("Combat")                    -- a titled card
+g:Toggle({ Name = "Aim assist" }); g:SetTitle("Fight")
+
+local tb = Tab:Tabbox({ "Aim", "Visuals" })         -- a card with tabs inside it
+tb.Aim:Slider({ Name = "FOV", Min = 10, Max = 120, Default = 60 })
+tb[2]:Toggle({ Name = "Show boxes" }); tb:Select("Visuals")
+
+local a = Tab:Accordion({ Name = "More", Open = false })  -- a card that opens and closes
+a:Button({ Name = "Hidden" }); a:Open(); a:Close(); a:Flip(); print(a:IsOpen())
+```
+
+All three also have `:SetVisible(false)`.
+
 ## Countdown timer
 
 ```lua
